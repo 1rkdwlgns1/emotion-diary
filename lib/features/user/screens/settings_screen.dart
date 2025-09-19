@@ -1,24 +1,40 @@
 import 'package:flutter/material.dart';
-import 'account_manage_screen.dart'; // 실제 경로에 맞게 import
+import '../dialogs/nickname_edit_dialog.dart';
+import 'account_manage_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final String nickname;
+  final ValueChanged<String> onNicknameChanged;
+
+  const SettingsScreen({
+    super.key,
+    required this.nickname,
+    required this.onNicknameChanged,
+  });
+
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  late String nickname;
   bool diaryAlarmOn = true;
   bool contentsAlarmOn = false;
 
   @override
+  void initState() {
+    super.initState();
+    nickname = widget.nickname;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    TextStyle sectionTitle = const TextStyle(
+    final TextStyle sectionTitle = const TextStyle(
       fontWeight: FontWeight.bold,
       fontSize: 15,
       color: Colors.black87,
     );
-    TextStyle menuTitle = const TextStyle(
+    final TextStyle menuTitle = const TextStyle(
       fontSize: 15,
       fontWeight: FontWeight.bold,
       color: Colors.black87,
@@ -30,7 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('설정', style: TextStyle(color: Colors.black87)),
@@ -42,10 +58,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             // ===== 설정 =====
             Text('설정', style: sectionTitle),
-            const SizedBox(height: 7),
+            SizedBox(height: 7),
+            // 계정 관리 메뉴
             _RoundedMenuBtn(
               title: '계정 관리',
               onTap: () {
+                // 계정 관리 화면 이동(구현 필요)
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -56,26 +74,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('계정 관리: 별도 화면 연결 필요!')));
               },
               textStyle: menuTitle,
             ),
-            const SizedBox(height: 1),
-
-            // ===== 닉네임 =====
-            Text('닉네임', style: sectionTitle),
-            const SizedBox(height: 7),
+            SizedBox(height: 1),
+            // 닉네임 변경 메뉴
             _RoundedMenuBtn(
               title: '닉네임 변경',
-              onTap: () {},
+              onTap: () async {
+                await showNicknameEditDialog(
+                  context,
+                  currentNickname: nickname,
+                  onConfirm: (newNick) {
+                    setState(() => nickname = newNick);
+                    widget.onNicknameChanged(newNick);
+                  },
+                );
+              },
               textStyle: menuTitle,
             ),
-            const SizedBox(height: 1),
+            SizedBox(height: 8),
 
             // ===== 알림설정 =====
             Text('알림설정', style: sectionTitle),
-            const SizedBox(height: 7),
-
-            // --- 알림 설정 통합 박스
+            SizedBox(height: 7),
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -104,21 +129,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
 
-            // ===== 데이터 초기화 =====
+            // ===== 감정 데이터 초기화 =====
             _RoundedMenuBtn(
               title: '감정 데이터 초기화',
               onTap: () {},
               leading: Icon(Icons.refresh, color: Colors.red, size: 20),
               textColor: Colors.red,
             ),
-            const SizedBox(height: 0),
+            SizedBox(height: 0),
 
             // ===== 로그아웃 =====
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              children: const [
+              children: [
                 Text(
                   '로그아웃',
                   style: TextStyle(
@@ -136,7 +161,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-/// 둥근 메뉴 버튼 + 굵은 텍스트
 class _RoundedMenuBtn extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
@@ -166,7 +190,7 @@ class _RoundedMenuBtn extends StatelessWidget {
         ),
         child: Row(
           children: [
-            if (leading != null) ...[leading!, const SizedBox(width: 11)],
+            if (leading != null) ...[leading!, SizedBox(width: 11)],
             Expanded(
               child: Text(
                 title,
@@ -187,7 +211,6 @@ class _RoundedMenuBtn extends StatelessWidget {
   }
 }
 
-/// 알림 토글 메뉴(컨테이너 안 전용)
 class _AlarmSwitchMenu extends StatelessWidget {
   final String label;
   final IconData icon;

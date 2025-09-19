@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
 
-class UserScreen extends StatelessWidget {
+class UserScreen extends StatefulWidget {
   const UserScreen({super.key});
+  @override
+  State<UserScreen> createState() => _UserScreenState();
+}
+
+class _UserScreenState extends State<UserScreen> {
+  String nickname = 'Kang';
 
   @override
   Widget build(BuildContext context) {
@@ -39,9 +45,9 @@ class UserScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          '홍길동 님',
-                          style: TextStyle(
+                        Text(
+                          '$nickname 님',
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
@@ -54,7 +60,6 @@ class UserScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: const [
                             Text(
                               '오늘 하루도 수고했어요!',
@@ -74,11 +79,11 @@ class UserScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 30),
+
             // 감정 리포트 확인
             InkWell(
               borderRadius: borderRadius,
               onTap: () {
-                // 추후 연결 또는 임시 print
                 print('감정 리포트 확인 클릭');
               },
               child: Container(
@@ -196,28 +201,34 @@ class UserScreen extends StatelessWidget {
                 ),
               ),
             ),
-            // 설정
+            // 설정 메뉴
             InkWell(
               borderRadius: borderRadius,
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => SettingsScreen(
+                      nickname: nickname,
+                      onNicknameChanged: (newNick) {
+                        setState(() => nickname = newNick);
+                      },
+                    ),
+                  ),
                 );
               },
               child: Container(
                 padding: menuPadding,
-                margin: const EdgeInsets.only(bottom: 10),
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.grey.shade300, width: 1.2),
                   borderRadius: borderRadius,
                   color: Colors.white,
                 ),
                 child: Row(
-                  children: [
-                    const Icon(Icons.settings, size: 26, color: Colors.black87),
-                    const SizedBox(width: 16),
-                    const Expanded(
+                  children: const [
+                    Icon(Icons.settings, size: 26, color: Colors.black87),
+                    SizedBox(width: 16),
+                    Expanded(
                       child: Text(
                         '설정',
                         style: TextStyle(

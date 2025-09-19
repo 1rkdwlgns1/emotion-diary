@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../dialogs/password_change_dialog.dart';
+import '../dialogs/withdraw_dialog.dart';
 
 class AccountManageScreen extends StatelessWidget {
   final String username;
@@ -69,6 +71,7 @@ class AccountManageScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
+
             // 보안 섹션
             Text('보안', style: sectionTitle),
             const SizedBox(height: 7),
@@ -81,11 +84,23 @@ class AccountManageScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  // 비밀번호 변경
                   InkWell(
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(13),
                     ),
-                    onTap: () {}, // 비밀번호 변경 이벤트
+                    onTap: () async {
+                      await showPasswordChangeDialog(
+                        context,
+                        onSuccess: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('비밀번호가 정상적으로 변경되었습니다!'),
+                            ),
+                          );
+                        },
+                      );
+                    },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
@@ -140,12 +155,22 @@ class AccountManageScreen extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
-            // 회원탈퇴 버튼 수정 반영 (굵은 글씨 + 회색 테두리)
+            // 회원탈퇴 버튼
             Container(
               margin: const EdgeInsets.only(bottom: 7),
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () {},
+                onPressed: () async {
+                  await showWithdrawDialog(
+                    context,
+                    onWithdraw: () {
+                      // TODO: 실제 회원탈퇴 처리
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('회원탈퇴가 완료되었습니다.')));
+                    },
+                  );
+                },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.red,
                   side: BorderSide(color: Colors.grey.shade400, width: 1.2),
@@ -153,6 +178,7 @@ class AccountManageScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(22),
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 10),
+                  backgroundColor: Colors.white,
                 ),
                 child: const Text(
                   '회원탈퇴',
