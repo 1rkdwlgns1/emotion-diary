@@ -1,47 +1,155 @@
-#Face API 자리
-
-# services/vision.py
 import os
-import requests
-from config import AZURE_FACE_ENDPOINT, AZURE_FACE_KEY
+os.environ["TF_USE_LEGACY_KERAS"] = "0"
+
+import cv2
+from deepface import DeepFace
+
+EMO7 = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+EMO5 = ["joy", "sad", "anger", "neutral", "surprise"]
+
+def _laplacian_var(img_bgr):
+    try:
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    except Exception:
+        return 0.0
+
+def _area_weight(region):
+    if not region: return 0.0
+    w = float(region.get("w", 0) or 0)
+    h = float(region.get("h", 0) or 0)
+    return max(0.0, w * h)
+
+def _norm7(d7: dict) -> dict:
+    s = sum(float(d7.get(k,0.0)) for k in EMO7) or 1.0
+    return {k: float(d7.get(k,0.0))/s for k in EMO7}
+
+def _map7_to5(d7: dict) -> dict:
+    # deepface: angry, disgust, fear, happy, sad, surprise, neutral
+    return {
+        "joy":      float(d7.get("happy", 0.0)),
+        "sad":      float(d7.get("sad", 0.0)) + float(d7.get("fear", 0.0)),
+        "anger":    float(d7.get("angry", 0.0)) + float(d7.get("disgust", 0.0)),
+        "neutral":  float(d7.get("neutral", 0.0)),
+        "surprise": float(d7.get("surprise", 0.0)),
+    }
+
+def _norm5(d5: dict) -> dict:
+    s = sum(float(d5.get(k,0.0)) for k in EMO5) or 1.0
+    return {k: float(d5.get(k,0.0))/s for k in EMO5}
+
+def _analyze_frame(frame_bgr):
+    """
+    한 프레임에서 7감정 scores와 face region 반환.
+    retinaface 우선, 실패 시 opencv 폴백.
+    """
+    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    try:
+        res = DeepFace.analyze(
+            img_path=rgb, actions=['emotion'],
+            detector_backend='retinaface', enforce_detection=True
+        )
+    except Exception:
+        try:
+            res = DeepFace.analyze(
+                img_path=rgb, actions=['emotion'],
+                detector_backend='opencv', enforce_detection=False
+            )
+        except Exception:
+            return None
+    rec = res[0] if isinstance(res, list) else res
+    scores7 = rec.get("emotion", {}) or {}
+    region  = rec.get("region", {}) or {}
+    return _norm7(scores7), region
 
 def analyze(image_path: str) -> dict:
     """
-    이미지에서 얼굴의 emotion 추정 (Azure Face API)
-    반환: {"emotion": "...", "scores": {...}, "faces": [...]} 형태
-    얼굴이 없으면 {"emotion": "neutral", "scores": {}, "faces": []}
+    단일 이미지: 7감정 + 5감정 동시 제공
     """
-    if not (AZURE_FACE_ENDPOINT and AZURE_FACE_KEY):
-        # 키가 아직 없으면 mock 반환
-        return {"emotion": "neutral", "scores": {}, "faces": []}
-
-    url = f"{AZURE_FACE_ENDPOINT}/face/v1.0/detect"
-    params = {
-        "returnFaceAttributes": "emotion",
-        # 필요 시 "returnFaceId": "true", "detectionModel": "detection_03" 등 옵션 추가
-    }
-    headers = {
-        "Ocp-Apim-Subscription-Key": AZURE_FACE_KEY,
-        "Content-Type": "application/octet-stream",
-    }
-
-    with open(image_path, "rb") as f:
-        data = f.read()
-
     try:
-        r = requests.post(url, params=params, headers=headers, data=data, timeout=15)
-        r.raise_for_status()
-        faces = r.json()  # [{faceAttributes: {emotion: {...}}}, ...]
-        if not faces:
-            return {"emotion": "neutral", "scores": {}, "faces": []}
+        result = DeepFace.analyze(
+            img_path=image_path, actions=['emotion'],
+            detector_backend='retinaface', enforce_detection=True
+        )
+    except Exception:
+        try:
+            result = DeepFace.analyze(
+                img_path=image_path, actions=['emotion'],
+                detector_backend='opencv', enforce_detection=False
+            )
+        except Exception as e:
+            return {"emotion": "neutral", "scores7": {}, "scores5": {}, "faces": [], "error": str(e)}
 
-        # 여러 얼굴일 경우 첫 번째만 사용(원하면 평균/최댓값으로 확장 가능)
-        emo = faces[0].get("faceAttributes", {}).get("emotion", {})
-        if not emo:
-            return {"emotion": "neutral", "scores": {}, "faces": faces}
+    rec = result[0] if isinstance(result, list) else result
+    raw7 = _norm7(rec.get('emotion', {}) or {})
+    dist5 = _norm5(_map7_to5(raw7))
+    dom = max(dist5, key=dist5.get)
+    return {"emotion": dom, "scores7": raw7, "scores5": dist5, "faces": []}
 
-        top = max(emo, key=emo.get)
-        return {"emotion": top, "scores": emo, "faces": faces}
-    except Exception as e:
-        print("[AzureFace] error:", e)
-        return {"emotion": "neutral", "scores": {}, "faces": [], "error": str(e)}
+def analyze_video_weighted(path: str, sample_sec: float = 0.5, max_frames: int = 180) -> dict:
+    """
+    비디오: 프레임 품질 가중(얼굴면적×초점)으로 7감정 score 집계 → 5감정 변환 제공
+    반환:
+      {
+        "timeline": [...dominant(5-label)...],
+        "scores7": {...},        # 가중합 정규화된 7감정
+        "scores5": {...},        # Fusion용 5감정
+        "frames": N, "duration_est": sec
+      }
+    """
+    cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        return {"timeline": [], "scores7": {}, "scores5": {}, "frames": 0, "duration_est": 0.0}
+
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    step = max(int(fps * sample_sec), 1)
+
+    agg7 = {k: 0.0 for k in EMO7}
+    timeline = []
+    taken, idx = 0, 0
+
+    while True:
+        ret = cap.grab()
+        if not ret: break
+        if idx % step == 0:
+            ret2, frame = cap.retrieve()
+            if not ret2: break
+
+            lp = _laplacian_var(frame)
+            r = _analyze_frame(frame)
+            if r is None:
+                timeline.append("neutral")
+            else:
+                scores7, region = r
+                w_area = _area_weight(region)
+                w_focus = min(lp / 150.0, 1.0)     # 0~1
+                w = max(1e-6, w_area * (0.5 + 0.5*w_focus))
+
+                for k in EMO7:
+                    agg7[k] += w * float(scores7.get(k, 0.0))
+
+                # 타임라인은 5감정 기준 dominant
+                dist5 = _map7_to5(scores7)
+                dom = max(dist5, key=dist5.get) if dist5 else "neutral"
+                timeline.append(dom)
+
+            taken += 1
+            if taken >= max_frames: break
+        idx += 1
+    cap.release()
+
+    # 약한 보정 (중립 과대표/놀람 튜닝)
+    agg7["neutral"] *= 0.9
+    agg7["surprise"] *= 0.95
+
+    raw7 = _norm7(agg7)
+    dist5 = _norm5(_map7_to5(raw7))
+    duration_est = taken * sample_sec
+
+    return {
+        "timeline": timeline,
+        "scores7": raw7,
+        "scores5": dist5,
+        "frames": taken,
+        "duration_est": float(duration_est)
+    }

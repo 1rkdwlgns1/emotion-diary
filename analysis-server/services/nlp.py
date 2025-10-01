@@ -1,4 +1,6 @@
 # services/nlp.py
+# 간단한 키워드 기반 감정 분석
+
 def analyze(text: str):
     text = (text or "").strip()
     if not text:
