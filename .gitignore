@@ -1,0 +1,23 @@
+# Flutter/Dart
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# IDE
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# analysis-server: 올리면 안 되는 것들
+analysis-server/venv/
+analysis-server/venv310/
+analysis-server/uploads/
+analysis-server/__pycache__/
+analysis-server/.vscode/
+analysis-server/.env
