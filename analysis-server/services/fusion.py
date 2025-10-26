@@ -1,54 +1,57 @@
+# services/fusion.py
 from collections import Counter
 
 _KEYS = ["joy", "sad", "anger", "neutral", "surprise"]
 
 def _norm(d: dict) -> dict:
-    s = sum(d.get(k, 0.0) for k in _KEYS) or 1.0
+    s = sum(float(d.get(k, 0.0)) for k in _KEYS) or 1.0
     return {k: float(d.get(k, 0.0)) / s for k in _KEYS}
 
-def face_dist_from_timeline(timeline: list[str]) -> dict:
-    # deepface: angry, disgust, fear, happy, sad, surprise, neutral
-    cnt = Counter(timeline or [])
+def face_dist_from_timeline(tl: list[str]) -> dict:
+    c = Counter(tl or [])
     d = {
-        "joy":      cnt.get("happy", 0),
-        "sad":      cnt.get("sad", 0) + cnt.get("fear", 0),
-        "anger":    cnt.get("angry", 0) + cnt.get("disgust", 0),
-        "neutral":  cnt.get("neutral", 0),
-        "surprise": cnt.get("surprise", 0),
+        "joy": c.get("happy", 0),
+        "sad": c.get("sad", 0) + c.get("fear", 0),
+        "anger": c.get("angry", 0) + c.get("disgust", 0),
+        "neutral": c.get("neutral", 0),
+        "surprise": c.get("surprise", 0),
     }
     return _norm(d)
 
 def fuse(text: dict, face: dict, alpha: float | None = None, beta: float | None = None) -> dict:
-    """
-    기본 가중치: 텍스트 0.7 / 얼굴 0.3
-    개선:
-      - neutral 억제
-      - confidence < 0.4 → 'uncertain'
-      - tie-break (text vs face 다르고 차이 < 0.15) → 'mixed'
-    """
     a = alpha if alpha is not None else 0.7
-    b = beta if beta is not None else 0.3
-
+    b = beta  if beta  is not None else 0.3
     t = _norm(text or {})
     f = _norm(face or {})
 
-    fused = {k: a * t.get(k, 0.0) + b * f.get(k, 0.0) for k in _KEYS}
-
-    # neutral 억제
+    fused = {k: a*t.get(k,0.0) + b*f.get(k,0.0) for k in _KEYS}
+    # 중립 가중 소폭 억제
     fused["neutral"] *= 0.9
-
     fused = _norm(fused)
+
     label = max(fused, key=fused.get)
-    conf = fused[label]
+    conf  = fused[label]
 
-    # 불확실성 처리
-    if conf < 0.4:
-        label = "uncertain"
+    # 불확실 임계값 완화 (0.35)
+    final_label = label if conf >= 0.35 else "uncertain"
 
-    # tie-break 처리
-    text_top = max(t, key=t.get)
-    face_top = max(f, key=f.get)
-    if text_top != face_top and abs(t.get(text_top, 0) - f.get(face_top, 0)) < 0.15:
-        label = "mixed"
+    # 힌트: 텍스트/페이스 상위 감정 비교
+    text_top = max(t, key=t.get) if t else None
+    face_top = max(f, key=f.get) if f else None
+    source_hint = "ok"
+    if text_top and face_top:
+        if text_top != face_top:
+            source_hint = "conflict"
+        else:
+            source_hint = "agree"
 
-    return {"final_label": label, "confidence": conf, "fused": fused}
+    # 근소차 혼합
+    if text_top and face_top and text_top != face_top and abs(t[text_top]-f[face_top]) < 0.15:
+        final_label = "mixed"
+
+    return {
+        "final_label": final_label,
+        "confidence": conf,
+        "distribution": fused,
+        "source_hint": source_hint,
+    }

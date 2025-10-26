@@ -1,3 +1,6 @@
+# Whisper STT service
+# Speech-to-Text transcription using Whisper
+
 import os
 import whisper
 import torch

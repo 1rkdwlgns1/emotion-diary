@@ -1,23 +1,105 @@
-# Flutter/Dart
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-
-# IDE
-*.iml
-*.ipr
-*.iws
+# ===== OS / IDE =====
+.DS_Store
+Thumbs.db
 .idea/
+.vscode/
+*.code-workspace
+*.swp
+*.swo
 
-# analysis-server: 올리면 안 되는 것들
-analysis-server/venv/
-analysis-server/venv310/
-analysis-server/uploads/
-analysis-server/__pycache__/
-analysis-server/.vscode/
-analysis-server/.env
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv310/
+venv/
+venv*/
+env/
+site-packages/
+dist/
+build/
+
+# ===== Logs / Temp =====
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# ===== Secrets / Credentials (절대 커밋 금지) =====
+.env
+.env.*
+!.env.example           # 템플릿만 허용
+*.pem
+*.crt
+*.key
+*.p12
+*.pfx
+*.cer
+*credentials*.json
+*service*.json
+aws_credentials
+.aws/
+gcloud/
+azure*
+
+# ===== DB / 캐시 / 결과 산출물 =====
+db/*.db
+db/*.sqlite
+db/analysis_results.db
+db/*.json
+results/
+outputs/
+reports/
+uploads/
+upload/
+media/
+samples_raw/
+data_raw/
+
+# ===== 모델 / 캐시(대용량) =====
+.model_cache/
+cache/
+.cache/
+huggingface/
+transformers_cache/
+deepface/
+whisper_cache/
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.bin
+
+# ===== 원천 미디어 파일(테스트 영상/음원/이미지 등) =====
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.wmv
+*.flv
+*.webm
+*.wav
+*.m4a
+*.mp3
+*.aac
+*.flac
+*.jpg
+*.jpeg
+*.png
+
+# ===== 환경별 설정 / 바이너리 =====
+*.exe
+*.dll
+*.dylib
+*.so
+*.bat
+*.sh
+
+# ===== 컨테이너/가상화 산출물 =====
+docker-data/

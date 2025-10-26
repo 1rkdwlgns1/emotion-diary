@@ -25,7 +25,6 @@ def _norm7(d7: dict) -> dict:
     return {k: float(d7.get(k,0.0))/s for k in EMO7}
 
 def _map7_to5(d7: dict) -> dict:
-    # deepface: angry, disgust, fear, happy, sad, surprise, neutral
     return {
         "joy":      float(d7.get("happy", 0.0)),
         "sad":      float(d7.get("sad", 0.0)) + float(d7.get("fear", 0.0)),
@@ -39,10 +38,6 @@ def _norm5(d5: dict) -> dict:
     return {k: float(d5.get(k,0.0))/s for k in EMO5}
 
 def _analyze_frame(frame_bgr):
-    """
-    한 프레임에서 7감정 scores와 face region 반환.
-    retinaface 우선, 실패 시 opencv 폴백.
-    """
     rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
     try:
         res = DeepFace.analyze(
@@ -53,7 +48,7 @@ def _analyze_frame(frame_bgr):
         try:
             res = DeepFace.analyze(
                 img_path=rgb, actions=['emotion'],
-                detector_backend='opencv', enforce_detection=False
+                detector_backend='opencv', enforce_detection=False   # ✅ 폴백
             )
         except Exception:
             return None
@@ -63,9 +58,6 @@ def _analyze_frame(frame_bgr):
     return _norm7(scores7), region
 
 def analyze(image_path: str) -> dict:
-    """
-    단일 이미지: 7감정 + 5감정 동시 제공
-    """
     try:
         result = DeepFace.analyze(
             img_path=image_path, actions=['emotion'],
@@ -75,7 +67,7 @@ def analyze(image_path: str) -> dict:
         try:
             result = DeepFace.analyze(
                 img_path=image_path, actions=['emotion'],
-                detector_backend='opencv', enforce_detection=False
+                detector_backend='opencv', enforce_detection=False      # ✅ 폴백
             )
         except Exception as e:
             return {"emotion": "neutral", "scores7": {}, "scores5": {}, "faces": [], "error": str(e)}
@@ -86,17 +78,7 @@ def analyze(image_path: str) -> dict:
     dom = max(dist5, key=dist5.get)
     return {"emotion": dom, "scores7": raw7, "scores5": dist5, "faces": []}
 
-def analyze_video_weighted(path: str, sample_sec: float = 0.5, max_frames: int = 180) -> dict:
-    """
-    비디오: 프레임 품질 가중(얼굴면적×초점)으로 7감정 score 집계 → 5감정 변환 제공
-    반환:
-      {
-        "timeline": [...dominant(5-label)...],
-        "scores7": {...},        # 가중합 정규화된 7감정
-        "scores5": {...},        # Fusion용 5감정
-        "frames": N, "duration_est": sec
-      }
-    """
+def analyze_video_weighted(path: str, sample_sec: float = 1.0, max_frames: int = 180):
     cap = cv2.VideoCapture(path)
     if not cap.isOpened():
         return {"timeline": [], "scores7": {}, "scores5": {}, "frames": 0, "duration_est": 0.0}
@@ -122,13 +104,10 @@ def analyze_video_weighted(path: str, sample_sec: float = 0.5, max_frames: int =
             else:
                 scores7, region = r
                 w_area = _area_weight(region)
-                w_focus = min(lp / 150.0, 1.0)     # 0~1
+                w_focus = min(lp / 150.0, 1.0)
                 w = max(1e-6, w_area * (0.5 + 0.5*w_focus))
-
                 for k in EMO7:
                     agg7[k] += w * float(scores7.get(k, 0.0))
-
-                # 타임라인은 5감정 기준 dominant
                 dist5 = _map7_to5(scores7)
                 dom = max(dist5, key=dist5.get) if dist5 else "neutral"
                 timeline.append(dom)
@@ -138,7 +117,6 @@ def analyze_video_weighted(path: str, sample_sec: float = 0.5, max_frames: int =
         idx += 1
     cap.release()
 
-    # 약한 보정 (중립 과대표/놀람 튜닝)
     agg7["neutral"] *= 0.9
     agg7["surprise"] *= 0.95
 
@@ -146,10 +124,5 @@ def analyze_video_weighted(path: str, sample_sec: float = 0.5, max_frames: int =
     dist5 = _norm5(_map7_to5(raw7))
     duration_est = taken * sample_sec
 
-    return {
-        "timeline": timeline,
-        "scores7": raw7,
-        "scores5": dist5,
-        "frames": taken,
-        "duration_est": float(duration_est)
-    }
+    return {"timeline": timeline, "scores7": raw7, "scores5": dist5,
+            "frames": taken, "duration_est": float(duration_est)}
