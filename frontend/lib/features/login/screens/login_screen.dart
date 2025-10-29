@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'id_find_screen.dart';
 import '../signup/signup_screen.dart';
 import 'password_find_screen.dart'; // 실제 경로와 파일명에 따라 맞게!
+import '../../../services/api_service.dart';
+import '../../main_tab/main_tab_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -71,8 +73,35 @@ class _LoginScreenState extends State<LoginScreen> {
                   width: double.infinity,
                   height: 44,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // 로그인 처리 로직
+                    onPressed: () async {
+                      final email = emailController.text.trim();
+                      final password = passwordController.text.trim();
+
+                      final res = await ApiService.login(
+                        email: email,
+                        password: password,
+                      );
+                      print("로그인 결과: $res");
+
+                      if (res['ok'] == true) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('로그인 성공!')),
+                        );
+
+                        // ✅ 메인화면으로 이동 (main_tab_screen.dart)
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainTabScreen(),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('로그인 실패: ${res['message'] ?? ''}'),
+                          ),
+                        );
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mainGreen,

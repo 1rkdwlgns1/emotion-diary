@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'trash_warning_screen.dart'; // ✨ 경고 화면 import
 
 // lerpDouble 대체
 double _lerp(num a, num b, double t) => a + (b - a) * t;
@@ -21,15 +22,34 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
     super.dispose();
   }
 
+  // 👇👇 이 함수가 수정되었습니다.
   void _submit() {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    // TODO: 실제 저장/전송 로직 연결
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('감정을 버렸어요. 잘했어요!')),
+    if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('버릴 감정을 입력해 주세요.')),
+      );
+      return;
+    }
+
+    // 일반적인 페이지 이동이 아닌, 투명한 배경의 팝업 페이지로 이동
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false, // 이전 페이지가 비치도록 설정
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return const TrashWarningScreen();
+        },
+        // 부드러운 전환 효과
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+      ),
     );
-    Navigator.pop(context);
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -48,18 +68,31 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 상단 아이콘
+              // 상단 이미지 박스
               Align(
                 alignment: Alignment.topCenter,
                 child: Container(
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3F1),
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF3B82F6), width: 2),
                   ),
-                  child: const Icon(Icons.gesture, size: 40, color: Colors.black87),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/trash_0.png',
+                      width: 72,
+                      height: 72,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          width: 72, height: 72, color: Colors.grey[300],
+                          child: const Icon(Icons.error, size: 40, color: Colors.red),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),

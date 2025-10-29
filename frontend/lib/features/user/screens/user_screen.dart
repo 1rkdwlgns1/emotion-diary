@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'settings_screen.dart';
 
 class UserScreen extends StatefulWidget {
-  const UserScreen({super.key});
+  const UserScreen({super.key, this.onGoCalendar, this.onGoContents});
+
+  // ← 메인탭에서 내려주는 탭 전환 콜백 (UI 변경 없음)
+  final VoidCallback? onGoCalendar; // 감정 리포트 확인 → 캘린더 탭
+  final VoidCallback? onGoContents; // 익명 감정 메시지 관리 → 콘텐츠 탭
+
   @override
   State<UserScreen> createState() => _UserScreenState();
 }
@@ -22,7 +27,7 @@ class _UserScreenState extends State<UserScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
           children: [
             const SizedBox(height: 8),
-            // 프로필 박스
+            // 프로필 박스 (그대로)
             Container(
               padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 15),
               decoration: BoxDecoration(
@@ -80,11 +85,11 @@ class _UserScreenState extends State<UserScreen> {
             ),
             const SizedBox(height: 30),
 
-            // 감정 리포트 확인
+            // 감정 리포트 확인 → 캘린더 탭으로
             InkWell(
               borderRadius: borderRadius,
               onTap: () {
-                print('감정 리포트 확인 클릭');
+                widget.onGoCalendar?.call();
               },
               child: Container(
                 padding: menuPadding,
@@ -111,42 +116,12 @@ class _UserScreenState extends State<UserScreen> {
                 ),
               ),
             ),
-            // 감정 패턴
+
+            // 익명 감정 메시지 관리 → 콘텐츠 탭으로
             InkWell(
               borderRadius: borderRadius,
               onTap: () {
-                print('감정 패턴 클릭');
-              },
-              child: Container(
-                padding: menuPadding,
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300, width: 1.2),
-                  borderRadius: borderRadius,
-                  color: Colors.white,
-                ),
-                child: Row(
-                  children: [
-                    Image.asset('assets/brain.png', width: 28),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Text(
-                        '감정 패턴',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // 익명 감정 메시지 관리
-            InkWell(
-              borderRadius: borderRadius,
-              onTap: () {
-                print('익명 감정 메시지 관리 클릭');
+                widget.onGoContents?.call();
               },
               child: Container(
                 padding: menuPadding,
@@ -201,7 +176,8 @@ class _UserScreenState extends State<UserScreen> {
                 ),
               ),
             ),
-            // 설정 메뉴
+
+            // 설정 메뉴 (그대로)
             InkWell(
               borderRadius: borderRadius,
               onTap: () {

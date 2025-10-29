@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:capstone/services/api_service.dart';
 import '../../main_tab/main_tab_screen.dart';
 
 class InterestSelectScreen extends StatefulWidget {
   const InterestSelectScreen({super.key});
+
   @override
   State<InterestSelectScreen> createState() => _InterestSelectScreenState();
 }
@@ -20,6 +22,7 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
     "게임",
     "기타",
   ];
+
   List<String> selected = [];
 
   @override
@@ -58,6 +61,8 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
                 style: TextStyle(fontSize: 14, color: Colors.black54),
               ),
               const SizedBox(height: 24),
+
+              // ✅ 취미 선택 Wrap
               Wrap(
                 spacing: 10,
                 runSpacing: 12,
@@ -92,12 +97,17 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
                           selected.remove(interest);
                         } else if (selected.length < 3) {
                           selected.add(interest);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('최대 3개까지만 선택 가능합니다.')),
+                          );
                         }
                       });
                     },
                   );
                 }),
               ),
+
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -107,22 +117,52 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
                 ),
               ),
               const Spacer(),
+
+              // ✅ 다음(시작하기) 버튼
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: selected.isEmpty
-                      ? null
-                      : () {
-                          // ✅ 메인화면으로 이동
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const MainTabScreen(),
+                  onPressed: () async {
+                    if (selected.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('최소 1개 이상 선택해야 합니다.')),
+                      );
+                      return;
+                    }
+
+                    try {
+                      final res = await ApiService.saveInterests(selected);
+
+                      if (res['ok'] == true) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('취미 저장 완료!')),
+                        );
+
+                        // ✅ 메인 화면으로 이동
+                        if (!mounted) return;
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainTabScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '저장 실패: ${res['message'] ?? '알 수 없는 오류'}',
                             ),
-                            (route) => false,
-                          );
-                        },
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('오류 발생: $e')));
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: mainGreen,
                     foregroundColor: Colors.white,

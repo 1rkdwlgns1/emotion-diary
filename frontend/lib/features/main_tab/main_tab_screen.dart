@@ -15,18 +15,32 @@ class MainTabScreen extends StatefulWidget {
 class _MainTabScreenState extends State<MainTabScreen> {
   int _currentIndex = 0;
   final labels = ['홈', '캘린더', '콘텐츠', '사용자'];
-  final List<Widget> _pages = [
-    HomeScreen(),
-    CalendarScreen(),
-    ContentsHomeView(),
-    UserScreen(), // 꼭 이렇게!
-  ];
+
+  void _go(int idx) => setState(() => _currentIndex = idx);
+  void _goCalendar() => _go(1);
+  void _goContents() => _go(2);
+
+  Widget _page(int idx) {
+    switch (idx) {
+      case 0:
+        return const HomeScreen();
+      case 1:
+        return const CalendarScreen();
+      case 2:
+        return const ContentsHomeView();
+      case 3:
+        // ← 콜백만 내려보냄. UI는 UserScreen 안에서 그대로 유지됨.
+        return UserScreen(onGoCalendar: _goCalendar, onGoContents: _goContents);
+      default:
+        return const HomeScreen();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: _pages[_currentIndex],
+      body: _page(_currentIndex),
       bottomNavigationBar: Container(
         color: Colors.white,
         child: Column(
@@ -43,7 +57,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
                           'assets/${tabIconNames[idx]}_${isSelected ? "1" : "0"}.png';
                       return Expanded(
                         child: InkWell(
-                          onTap: () => setState(() => _currentIndex = idx),
+                          onTap: () => _go(idx),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [

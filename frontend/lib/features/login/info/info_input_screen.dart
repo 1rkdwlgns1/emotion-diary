@@ -1,4 +1,6 @@
+import 'package:flutter/services.dart'; // ✅ 텍스트 필터링용
 import 'package:flutter/material.dart';
+import '../../../services/api_service.dart';
 import 'interest_select_screen.dart';
 
 class InfoInputScreen extends StatefulWidget {
@@ -8,6 +10,10 @@ class InfoInputScreen extends StatefulWidget {
 }
 
 class _InfoInputScreenState extends State<InfoInputScreen> {
+  final nicknameController = TextEditingController();
+  final TextEditingController _nickCtrl = TextEditingController();
+  final FocusNode _nickFocus = FocusNode();
+
   String gender = '남성';
   int age = 25;
   String mbti = 'ISFJ';
@@ -112,6 +118,57 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                   ),
                 ],
               ),
+              // ▶ 닉네임 (성별과 나이 사이에 삽입)
+              const SizedBox(height: 20),
+              const Text(
+                "닉네임",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: TextField(
+                    controller: nicknameController,
+                    focusNode: _nickFocus,
+                    textInputAction: TextInputAction.next,
+                    maxLength: 12,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'[a-zA-Z0-9가-힣_]+'),
+                      ),
+                    ],
+                    decoration: InputDecoration(
+                      counterText: "", // 길이 카운트 숨김
+                      hintText: "닉네임 입력",
+                      hintStyle: const TextStyle(color: Colors.grey),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 13,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: mainGreen,
+                          width: 1.1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: mainGreen,
+                          width: 1.6,
+                        ),
+                      ),
+                      fillColor: Colors.white,
+                      filled: true,
+                    ),
+                    onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 20),
 
@@ -193,14 +250,49 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const InterestSelectScreen(),
-                      ),
-                    );
+                  onPressed: () async {
+                    try {
+                      // ✅ 선택값들 (이미 state에 있음)
+                      final selectedGender = gender == '남성' ? 'M' : 'F';
+                      final selectedAge = age; // int형
+                      final selectedMbti = mbti;
+
+                      // ✅ 서버에 업데이트 요청
+                      final res = await ApiService.updateProfile(
+                        nickname: nicknameController.text.trim(),
+                        gender: selectedGender,
+                        age: selectedAge,
+                        mbti: selectedMbti,
+                      );
+
+                      print('프로필 업데이트 결과: $res');
+
+                      if (res['ok'] == true) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('프로필이 저장되었습니다.')),
+                        );
+
+                        // ✅ 다음 화면으로 이동
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const InterestSelectScreen(),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('저장 실패: ${res['message'] ?? ''}'),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('오류 발생: $e')));
+                    }
                   },
+
                   style: ElevatedButton.styleFrom(
                     backgroundColor: mainGreen,
                     foregroundColor: Colors.white,

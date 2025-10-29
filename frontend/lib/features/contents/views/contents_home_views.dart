@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../trash/trash_write_screen.dart';
+import '../sender/send_message_screen.dart';
 
 const _kCardBg = Color(0xFFE3E6F9); // 버튼 배경색
 const double _kAlignY = -0.50;
@@ -10,9 +11,13 @@ class ContentsHomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).padding.bottom;
+    final BoxDecoration imageBoxDecoration = BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.black.withOpacity(.06)),
+    );
 
     return Padding(
-      // 상단
       padding: EdgeInsets.fromLTRB(20, 16, 20, bottomInset + 20),
       child: SizedBox.expand(
         child: Align(
@@ -43,24 +48,41 @@ class ContentsHomeView extends StatelessWidget {
                   ),
                   const SizedBox(height: 22),
 
-                  // 카드 1
+                  // 카드 1: 익명 메시지 보내기
                   _VaultCard(
                     bg: _kCardBg,
-                    leading: const _IconBox(icon: Icons.mail_outline),
+                    leading: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: imageBoxDecoration,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Image.asset('assets/message_1.png'),
+                      ),
+                    ),
                     title: '익명 메시지 보내기',
                     subtitle: '감정을 공감하는 익명의 편지 보내 보세요.',
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("익명 메시지 보내기 눌림")),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SendMessageScreen()),
                       );
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // 카드 2 (아이콘: inbox_outlined 유지)
+                  // 카드 2: 익명 메시지 보관함
                   _VaultCard(
                     bg: _kCardBg,
-                    leading: const _IconBox(icon: Icons.inbox_outlined),
+                    leading: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: imageBoxDecoration,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Image.asset('assets/box.png'),
+                      ),
+                    ),
                     title: '익명 메시지 보관함',
                     subtitle: '익명으로 받은 메시지를 안전하게 보관하는 공간이에요.',
                     onTap: () {
@@ -71,10 +93,18 @@ class ContentsHomeView extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  // 카드 3
+                  // 카드 3: 감정 쓰레기통
                   _VaultCard(
                     bg: _kCardBg,
-                    leading: const _IconBox(icon: Icons.delete_outline),
+                    leading: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: imageBoxDecoration,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Image.asset('assets/trash_1.png'),
+                      ),
+                    ),
                     title: '감정 쓰레기통',
                     subtitle: '지워도 괜찮아요. 여긴 당신만의 휴지통이에요.',
                     onTap: () {
@@ -164,26 +194,6 @@ class _VaultCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// 아이콘 박스
-class _IconBox extends StatelessWidget {
-  const _IconBox({required this.icon});
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(.06)),
-      ),
-      child: Icon(icon, size: 28, color: Colors.black87),
     );
   }
 }

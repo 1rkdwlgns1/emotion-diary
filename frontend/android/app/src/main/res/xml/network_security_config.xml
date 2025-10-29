@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 앱 전체에 대해 HTTP(평문) 허용 -->
+    <base-config cleartextTrafficPermitted="true" />
+    <!-- 필요하면 특정 도메인/아이피만 허용하도록 아래처럼 좁힐 수도 있음
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.11.26.62</domain>
+    </domain-config>
+    -->
+</network-security-config>

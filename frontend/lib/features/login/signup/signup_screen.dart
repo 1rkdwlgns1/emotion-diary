@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 // ⭐️ 이름과 위치 주의!
+import '../../../services/api_service.dart';
 import '../info/signup_complete_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -16,19 +17,159 @@ class _SignupScreenState extends State<SignupScreen> {
   bool showConfirmPassword = false;
   String? pwError;
 
-  void signup() {
-    setState(() {
-      if (passwordController.text != confirmPwController.text) {
-        pwError = "비밀번호가 일치하지 않아요!";
-      } else {
-        pwError = null;
-        // 회원가입 완료 안내 화면으로 이동!
+  // void signup() {
+  //   setState(() {
+  //     if (passwordController.text != confirmPwController.text) {
+  //       pwError = "비밀번호가 일치하지 않아요!";
+  //     } else {
+  //       pwError = null;
+  //       // 회원가입 완료 안내 화면으로 이동!
+  //       Navigator.pushReplacement(
+  //         context,
+  //         MaterialPageRoute(builder: (_) => const SignupCompleteScreen()),
+  //       );
+  //     }
+  //   });
+  // }
+
+  //   Future<void> signup() async {
+  //   // 비밀번호 일치 여부 확인
+  //   if (passwordController.text != confirmPwController.text) {
+  //     setState(() => pwError = "비밀번호가 일치하지 않아요!");
+  //     return;
+  //   }
+  //   setState(() => pwError = null);
+
+  //   final email = emailController.text.trim();
+  //   final password = passwordController.text.trim();
+
+  //   if (email.isEmpty || password.isEmpty) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       const SnackBar(content: Text('이메일과 비밀번호를 입력하세요.')),
+  //     );
+  //     return;
+  //   }
+
+  //   try {
+  //     final res = await ApiService.register(
+  //       email: email,
+  //       password: password,
+  //       nickname: '임시닉네임', // 다음 info_input_screen에서 수정 예정
+  //       gender: 'M',
+  //       mbti: 'INFJ',
+  //     );
+
+  //     print('회원가입 결과: $res');
+
+  //     if (res['ok'] == true) {
+  //       if (!mounted) return;
+  //         // ✅ 회원가입 성공 시 자동 로그인 (토큰 저장)
+  //       try {
+  //         final loginRes = await ApiService.login(
+  //           email: email,
+  //           password: password,
+  //         );
+
+  //         print('자동 로그인 결과: $loginRes');
+
+  //         if (loginRes['ok'] == true && loginRes['user']?['token'] != null) {
+  //           ScaffoldMessenger.of(context).showSnackBar(
+  //             const SnackBar(content: Text('회원가입 + 자동 로그인 성공!')),
+  //           );
+  //         } else {
+  //           ScaffoldMessenger.of(context).showSnackBar(
+  //             const SnackBar(content: Text('회원가입은 성공했지만 자동 로그인 실패')),
+  //           );
+  //         }
+  //       } catch (e) {
+  //         print('자동 로그인 중 오류: $e');
+  //       }
+
+  //       // ✅ 이후 info_input_screen으로 이동
+  //       Navigator.pushReplacement(
+  //         context,
+  //         MaterialPageRoute(builder: (_) => const SignupCompleteScreen()),
+  //       );
+  //     } else {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(content: Text('회원가입 실패: ${res['message'] ?? ''}')),
+  //       );
+  //     }
+  //   } catch (e) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('오류 발생: $e')),
+  //     );
+  //   }
+  // }
+  Future<void> signup() async {
+    // 비밀번호 일치 확인
+    if (passwordController.text != confirmPwController.text) {
+      setState(() => pwError = "비밀번호가 일치하지 않아요!");
+      return;
+    }
+    setState(() => pwError = null);
+
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('이메일과 비밀번호를 입력하세요.')));
+      return;
+    }
+
+    try {
+      // ✅ 회원가입 요청
+      final res = await ApiService.register(
+        email: email,
+        password: password,
+        nickname: '임시닉네임', // info_input_screen에서 수정 예정
+        gender: 'M',
+        mbti: 'INFJ',
+      );
+
+      print('회원가입 결과: $res');
+
+      if (res['ok'] == true) {
+        // ✅ 회원가입 성공 후 자동 로그인
+        try {
+          final loginRes = await ApiService.login(
+            email: email,
+            password: password,
+          );
+          print('🔑 자동 로그인 결과: $loginRes');
+
+          if (loginRes['ok'] == true && loginRes['token'] != null) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('회원가입 + 자동 로그인 성공!')));
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('회원가입은 성공했지만 자동 로그인 실패')),
+            );
+          }
+        } catch (e) {
+          print('🚨 자동 로그인 중 오류: $e');
+        }
+
+        // ✅ 완료 후 다음 화면 이동
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const SignupCompleteScreen()),
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('회원가입 실패: ${res['message'] ?? ''}')),
+        );
       }
-    });
+    } catch (e) {
+      print('🚨 전체 오류: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('오류 발생: $e')));
+    }
   }
 
   @override

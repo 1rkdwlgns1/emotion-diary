@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../camera/camera_screen.dart';
-import 'dart:io';
+import 'loading_screen.dart';
+// home_screen.dart
 
 // 홈 화면 전체 예시
 class HomeScreen extends StatefulWidget {
@@ -11,8 +12,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? diaryImagePath; // 촬영한 사진 경로(필요시)
-
   @override
   Widget build(BuildContext context) {
     const mainGreen = Color(0xFF859A7E);
@@ -24,59 +23,40 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 36),
               const Text(
                 '대충그림..',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 24,
                   color: Colors.black87,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 12),
-              // 이미지 프리뷰 or 더미박스
-              diaryImagePath == null
-                  ? Container(
-                      width: 140,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[700]!, width: 2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: CustomPaint(painter: XMarkPainter()),
-                    )
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.file(
-                        File(diaryImagePath!),
-                        width: 140,
-                        height: 110,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
+              Icon(
+                Icons.camera_alt_outlined,
+                size: 120,
+                color: Colors.grey[400],
+              ),
               const SizedBox(height: 30),
               SizedBox(
                 width: 260,
                 height: 48,
                 child: ElevatedButton(
                   onPressed: () async {
-                    final imagePath = await Navigator.push(
+                    final path = await Navigator.push<String?>(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const CameraScreen(),
                       ),
                     );
-                    if (imagePath != null) {
-                      setState(() {
-                        diaryImagePath = imagePath;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: mainGreen,
-                          content: const Text('사진이 촬영되었습니다!'),
+
+                    if (path != null && mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => LoadingScreen(imagePath: path),
                         ),
                       );
-                      // TODO: 다음 단계(예: 일기 작성 화면 이동 등)로 imagePath 활용
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -100,23 +80,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
-
-// X표시 그림 더미
-class XMarkPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey[700]!
-      ..strokeWidth = 2.3;
-    canvas.drawLine(Offset(0, 0), Offset(size.width, size.height), paint);
-    canvas.drawLine(Offset(size.width, 0), Offset(0, size.height), paint);
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      paint..style = PaintingStyle.stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
