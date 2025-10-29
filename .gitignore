@@ -1,3 +1,15 @@
+# ==== ignore heavy stuff ====
+analysis-server/models/
+analysis-server/uploads/
+analysis-server/venv*/
+analysis-server/venv/
+analysis-server/venv310/
+*.pt
+*.bin
+*.safetensors
+*.onnx
+
+
 # ===== OS / IDE =====
 .DS_Store
 Thumbs.db

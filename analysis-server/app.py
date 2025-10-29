@@ -1,5 +1,5 @@
 # app.py
-import os, re, time, logging
+import os, re, time, logging, hashlib
 from uuid import uuid4
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -59,7 +59,6 @@ def _explicit_emotion(text: str) -> str | None:
     return None
 
 def _sha1(path: str) -> str:
-    import hashlib
     h = hashlib.sha1()
     with open(path, "rb") as f:
         for b in iter(lambda: f.read(1<<20), b""):
@@ -72,8 +71,11 @@ def root(): return "Analysis Server is running."
 @app.get("/health")
 def health():
     ok_whisper = hasattr(stt, "_model") and (stt._model is not None)
-    try: _ = kobert.predict("테스트"); ok_kobert = True
-    except Exception: ok_kobert = False
+    try:
+        _ = kobert.predict("테스트")
+        ok_kobert = True
+    except Exception:
+        ok_kobert = False
     return jsonify({"ok": True, "models": {"whisper": ok_whisper, "kobert": ok_kobert, "deepface":"ok"}}), 200
 
 @app.post("/analyze/file")
@@ -137,7 +139,6 @@ def analyze_file():
                     except: pass
             else: warnings.append("no_voice_detected")
 
-            # ★ 명시적 '기쁨' 표현 시 텍스트 가중 상향
             a = 0.7
             if _explicit_emotion(transcript) == "joy":
                 a = min(0.95, 0.85)
@@ -196,75 +197,116 @@ def analyze_file():
 
 @app.get("/results/day")
 def results_day():
-    date = request.args.get("date"); user_id = request.args.get("user_id") or None
-    return jsonify(get_results_by_day(date, user_id)), 200
+    try:
+        date = request.args.get("date")
+        user_id = request.args.get("user_id") or None
+        if not date:
+            return jsonify({"ok": False, "error": "date required"}), 400
+        data = get_results_by_day(date, user_id)
+        return jsonify(data), 200
+    except Exception as e:
+        logger.exception("results_day failed")
+        return jsonify({"ok": False, "error": f"internal error: {str(e)}"}), 500
 
+# === 안정화된 주간 범위 조회 ===
 @app.get("/results/range")
 def results_range():
-    start = request.args.get("start"); end = request.args.get("end")
-    user_id = request.args.get("user_id") or None
-    return jsonify(get_results_in_range(start, end, user_id)), 200
+    try:
+        start = request.args.get("start")
+        end = request.args.get("end")
+        user_id = request.args.get("user_id") or None
+
+        if not start or not end:
+            return jsonify({"ok": False, "error": "start/end required"}), 400
+
+        # 너무 큰 범위 가드 (환경변수로 조절)
+        from datetime import datetime
+        _max_days = int(os.getenv("MAX_RANGE_DAYS", "62"))
+        sd = datetime.fromisoformat(start)
+        ed = datetime.fromisoformat(end)
+        if (ed - sd).days > _max_days:
+            return jsonify({"ok": False, "error": f"date range too large (>{_max_days} days)"}), 400
+
+        rows = get_results_in_range(start, end, user_id)
+        return jsonify(rows), 200
+
+    except Exception as e:
+        logger.exception("results_range failed")
+        # ❗ 반드시 JSON으로 응답해서 클라이언트가 '연결 끊김'을 겪지 않도록 함
+        return jsonify({"ok": False, "error": f"internal error: {str(e)}"}), 500
 
 # === 주간 리포트 + GPT 피드백 ===
 @app.get("/report/weekly")
 def report_weekly():
-    start = request.args.get("start")
-    end = request.args.get("end")
-    user_id = request.args.get("user_id") or None
-
-    if not start or not end:
-        return jsonify({"ok": False, "error": "start/end required"}), 400
-
-    rows = get_results_in_range(start, end, user_id)
-
-    if not rows:
-        return jsonify({"ok": False, "error": "no data in range"}), 404
-
-    # 평균 산출 (fused.distribution 우선)
-    joy=sad=ang=sur=neu=0.0; n=0
-    for e in rows:
-        emo = e.get("emotion")
-        dist = None
-        if isinstance(emo, dict):
-            if (emo.get("fused") or {}).get("distribution"):
-                dist = emo["fused"]["distribution"]
-            elif (emo.get("face") or {}).get("distribution"):
-                dist = emo["face"]["distribution"]
-            elif (emo.get("text") or {}).get("distribution"):
-                dist = emo["text"]["distribution"]
-        if not dist:
-            continue
-        joy += float(dist.get("joy", 0.0)) * 100.0
-        sad += float(dist.get("sad", 0.0)) * 100.0
-        ang += float(dist.get("anger", 0.0)) * 100.0
-        neu += float(dist.get("neutral", 0.0)) * 100.0
-        sur += float(dist.get("surprise", 0.0)) * 100.0
-        n += 1
-
-    if n == 0:
-        return jsonify({"ok": False, "error": "no usable rows"}), 404
-
-    avg_pct = {
-        "joy":      joy/n/100.0,
-        "sad":      sad/n/100.0,
-        "anger":    ang/n/100.0,
-        "surprise": sur/n/100.0,
-        "neutral":  neu/n/100.0,
-    }
-
-    # GPT 주간 피드백 (요약 3~5문장 + 행동1~3)
     try:
-        fb = gpt.make_weekly_feedback(start, end, avg_pct, sample_count=n)
+        start = request.args.get("start")
+        end = request.args.get("end")
+        user_id = request.args.get("user_id") or None
+
+        if not start or not end:
+            return jsonify({"ok": False, "error": "start/end required"}), 400
+
+        rows = get_results_in_range(start, end, user_id)
+        if not rows:
+            return jsonify({"ok": False, "error": "no data in range"}), 404
+
+        joy=sad=ang=sur=neu=0.0; n=0
+        for e in rows:
+            emo = e.get("emotion")
+            dist = None
+            if isinstance(emo, dict):
+                if (emo.get("fused") or {}).get("distribution"):
+                    dist = emo["fused"]["distribution"]
+                elif (emo.get("face") or {}).get("distribution"):
+                    dist = emo["face"]["distribution"]
+                elif (emo.get("text") or {}).get("distribution"):
+                    dist = emo["text"]["distribution"]
+            elif isinstance(emo, str):
+                # MySQL JSON 직렬화 대비
+                try:
+                    import json
+                    emo_obj = json.loads(emo)
+                    if (emo_obj.get("fused") or {}).get("distribution"):
+                        dist = emo_obj["fused"]["distribution"]
+                    elif (emo_obj.get("face") or {}).get("distribution"):
+                        dist = emo_obj["face"]["distribution"]
+                    elif (emo_obj.get("text") or {}).get("distribution"):
+                        dist = emo_obj["text"]["distribution"]
+                except Exception:
+                    dist = None
+            if not dist: continue
+            joy += float(dist.get("joy", 0.0)) * 100.0
+            sad += float(dist.get("sad", 0.0)) * 100.0
+            ang += float(dist.get("anger", 0.0)) * 100.0
+            neu += float(dist.get("neutral", 0.0)) * 100.0
+            sur += float(dist.get("surprise", 0.0)) * 100.0
+            n += 1
+
+        if n == 0:
+            return jsonify({"ok": False, "error": "no usable rows"}), 404
+
+        avg_pct = {
+            "joy":      joy/n/100.0,
+            "sad":      sad/n/100.0,
+            "anger":    ang/n/100.0,
+            "surprise": sur/n/100.0,
+            "neutral":  neu/n/100.0,
+        }
+
+        try:
+            fb = gpt.make_weekly_feedback(start, end, avg_pct, sample_count=n)
+        except Exception:
+            fb = None
+
+        return jsonify({
+            "ok": True,
+            "range": {"start": start, "end": end, "count": n},
+            "avg_distribution": avg_pct,
+            "gpt_feedback": fb or "",
+        }), 200
     except Exception as e:
-        fb = None
-
-    return jsonify({
-        "ok": True,
-        "range": {"start": start, "end": end, "count": n},
-        "avg_distribution": avg_pct,   # 0~1 분포
-        "gpt_feedback": fb or "",
-    }), 200
-
+        logger.exception("report_weekly failed")
+        return jsonify({"ok": False, "error": f"internal error: {str(e)}"}), 500
 
 try:
     init_db(); logger.info("✅ DB schema ready.")
@@ -272,4 +314,5 @@ except Exception:
     logger.exception("❌ DB init failed")
 
 if __name__ == "__main__":
+    # threaded=True: 동시요청 약간 대응
     app.run(host="0.0.0.0", port=5001, debug=False, threaded=True)

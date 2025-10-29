@@ -13,7 +13,15 @@ log.setLevel(logging.INFO)
 DB_URL = os.getenv("DB_URL", "sqlite:///db/analysis_results.db")
 log.info(f"DB_URL in use: {DB_URL}")
 
-engine = create_engine(DB_URL, echo=False, future=True, pool_pre_ping=True)
+engine = create_engine(
+    DB_URL,
+    echo=False,
+    future=True,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_timeout=30,
+    connect_args={"check_same_thread": False} if DB_URL.startswith("sqlite") else {},
+)
 
 def _is_mysql() -> bool:
     try:
@@ -22,60 +30,71 @@ def _is_mysql() -> bool:
         return False
 
 def init_db():
-    """DB 종류에 맞게 테이블 생성"""
     is_mysql = _is_mysql()
-    ddl_mysql = """
+    # 분석 결과
+    ddl_mysql_results = """
     CREATE TABLE IF NOT EXISTS analysis_results (
       id           INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
       file_name    VARCHAR(255),
-      type         VARCHAR(16),       -- text/image/audio/video
+      type         VARCHAR(16),
       user_id      VARCHAR(64) DEFAULT 'anon',
       s3_key       VARCHAR(255),
-      emotion      JSON,              -- 전체 결과 JSON
+      emotion      JSON,
       transcript   LONGTEXT,
       created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
-    ddl_sqlite = """
+    ddl_sqlite_results = """
     CREATE TABLE IF NOT EXISTS analysis_results (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       file_name    TEXT,
-      type         TEXT,              -- text/image/audio/video
+      type         TEXT,
       user_id      TEXT DEFAULT 'anon',
       s3_key       TEXT,
-      emotion      TEXT,              -- JSON 문자열
+      emotion      TEXT,
       transcript   TEXT,
       created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
+    # ✅ 메모 테이블
+    ddl_mysql_notes = """
+    CREATE TABLE IF NOT EXISTS emotion_notes (
+      id         INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      user_id    VARCHAR(64) NOT NULL,
+      note_date  DATE NOT NULL,
+      content    TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_note (user_id, note_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    ddl_sqlite_notes = """
+    CREATE TABLE IF NOT EXISTS emotion_notes (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id    TEXT NOT NULL,
+      note_date  TEXT NOT NULL,     -- 'YYYY-MM-DD'
+      content    TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (user_id, note_date)
+    );
+    """
     with engine.begin() as conn:
-        conn.execute(text(ddl_mysql if is_mysql else ddl_sqlite))
+        conn.execute(text(ddl_mysql_results if is_mysql else ddl_sqlite_results))
+        conn.execute(text(ddl_mysql_notes if is_mysql else ddl_sqlite_notes))
 
-def save_analysis_result(
-    file_type: str,
-    file_name: str,
-    emotion_obj,
-    transcript: str = "",
-    user_id: str = "anon",
-    s3_key: str | None = None,
-):
-    """분석 1건 저장 (MySQL/SQLite 분기)"""
+def save_analysis_result(file_type, file_name, emotion_obj, transcript="", user_id="anon", s3_key=None):
     payload = json.dumps(emotion_obj, ensure_ascii=False)
     is_mysql = _is_mysql()
-    if is_mysql:
-        q = text("""
-            INSERT INTO analysis_results (file_name, type, user_id, s3_key, emotion, transcript)
-            VALUES (:f, :t, :uid, :s3, CAST(:e AS JSON), :tr)
-        """)
-    else:
-        q = text("""
-            INSERT INTO analysis_results (file_name, type, user_id, s3_key, emotion, transcript)
-            VALUES (:f, :t, :uid, :s3, :e, :tr)
-        """)
+    q = text("""
+        INSERT INTO analysis_results (file_name, type, user_id, s3_key, emotion, transcript)
+        VALUES (:f, :t, :uid, :s3, CAST(:e AS JSON), :tr)
+    """) if is_mysql else text("""
+        INSERT INTO analysis_results (file_name, type, user_id, s3_key, emotion, transcript)
+        VALUES (:f, :t, :uid, :s3, :e, :tr)
+    """)
     with engine.begin() as conn:
         conn.execute(q, {"f": file_name, "t": file_type, "uid": user_id, "s3": s3_key, "e": payload, "tr": transcript})
-
-# -------------------- 조회용 --------------------
 
 def get_recent_results(limit: int = 20):
     q = text("""
@@ -125,4 +144,46 @@ def get_results_in_range(start_date: str, end_date: str, user_id: str | None = N
     """)
     with engine.begin() as conn:
         rows = conn.execute(q, params).mappings().all()
+    return [dict(r) for r in rows]
+
+# ---------- ✅ 메모 전용 함수 ----------
+def upsert_note(user_id: str, note_date: str, content: str):
+    """user_id + YYYY-MM-DD 기준으로 UPSERT"""
+    if _is_mysql():
+        q = text("""
+          INSERT INTO emotion_notes (user_id, note_date, content)
+          VALUES (:uid, :d, :c)
+          ON DUPLICATE KEY UPDATE content = VALUES(content), updated_at = CURRENT_TIMESTAMP
+        """)
+    else:
+        q = text("""
+          INSERT INTO emotion_notes (user_id, note_date, content)
+          VALUES (:uid, :d, :c)
+          ON CONFLICT(user_id, note_date) DO UPDATE SET
+            content=excluded.content,
+            updated_at=CURRENT_TIMESTAMP
+        """)
+    with engine.begin() as conn:
+        conn.execute(q, {"uid": user_id, "d": note_date, "c": content})
+
+def get_note_by_day(user_id: str, note_date: str):
+    q = text("""
+      SELECT user_id, note_date, content, created_at, updated_at
+      FROM emotion_notes
+      WHERE user_id=:uid AND note_date=:d
+      LIMIT 1
+    """)
+    with engine.begin() as conn:
+        row = conn.execute(q, {"uid": user_id, "d": note_date}).mappings().first()
+    return dict(row) if row else None
+
+def get_notes_in_range(user_id: str, start_date: str, end_date: str):
+    q = text("""
+      SELECT user_id, note_date, content, updated_at
+      FROM emotion_notes
+      WHERE user_id=:uid AND note_date BETWEEN :s AND :e
+      ORDER BY note_date
+    """)
+    with engine.begin() as conn:
+        rows = conn.execute(q, {"uid": user_id, "s": start_date, "e": end_date}).mappings().all()
     return [dict(r) for r in rows]
