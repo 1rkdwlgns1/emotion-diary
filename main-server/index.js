@@ -1,13 +1,39 @@
-const express = require('express');
-const app = express();
-const PORT = 3000; // 서버가 실행될 포트 번호
+// index.js
+import express from "express";
+import dotenv from "dotenv";
+import pool from "./db.js"; // 방금 만든 db 연결 재사용
+import cors from "cors";
+import userRoutes from "./routes/users.js";
+import diaryRoutes from "./routes/diaries.js";
 
-// 기본 라우트 (http://localhost:3000 접속 시 보임)
-app.get('/', (req, res) => {
-  res.send('메인 서버가 정상적으로 실행 중입니다!');
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
+
+// 바디 JSON 파싱
+app.use(express.json());
+
+app.use("/users", userRoutes);
+app.use("/diaries", diaryRoutes);
+
+
+// 서버 살아있는지 체크
+app.get("/", (req, res) => {
+  res.send("✅ Emotion Diary API Server Running!");
 });
 
-// 서버 실행
+// DB 연결도 같이 체크
+app.get("/health", (req, res) => {
+  pool.query("SELECT 1 AS ok", (err, rows) => {
+    if (err) return res.status(500).json({ ok: false, error: err.message });
+    res.json({ ok: true, db: rows[0].ok }); // { ok: true, db: 1 }
+  });
+});
+
 app.listen(PORT, () => {
-  console.log(`✅ 서버 실행 중: http://localhost:${PORT}`);
+  console.log(`✅ Server running at http://localhost:${PORT}`);
 });
