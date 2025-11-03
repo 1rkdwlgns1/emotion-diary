@@ -26,7 +26,7 @@ def _client_ok():
         return False
 
 
-# ================= 단건 피드백 =================
+# ================= 단건 피드백 (일간) =================
 def make_feedback(kdate: str, fused_dist: Dict[str,float], transcript: str) -> str:
     """한 건 분석 요약 (일간)"""
     if not _client_ok(): return ""
@@ -47,9 +47,11 @@ def make_feedback(kdate: str, fused_dist: Dict[str,float], transcript: str) -> s
     return (rsp.choices[0].message.content or "").strip()
 
 
-# ================= 주간 피드백 =================
+# ================= 주간 피드백 (캘린더용) =================
 def make_weekly_feedback(start: str, end: str, avg_pct: Dict[str,float], sample_count: int = 0) -> str:
-    """주간 요약 (서버에서 행동 라인은 제거)"""
+    """
+    주간 요약 (캘린더에서 날짜 범위 선택 시 호출됨)
+    """
     if not _client_ok(): return ""
     prompt = f"""기간: {start} ~ {end}
 주간 평균 감정 분포(0~1): {json.dumps(avg_pct, ensure_ascii=False)}
@@ -69,7 +71,7 @@ def make_weekly_feedback(start: str, end: str, avg_pct: Dict[str,float], sample_
     return (rsp.choices[0].message.content or "").strip()
 
 
-# ================= 한국어 음악 추천 =================
+# ================= 음악 추천 (Today 화면용) =================
 def make_music_recs(emotion: str, count: int = 5, locale: str | None = None) -> List[Dict[str,str]]:
     """
     감정(emotion: joy|sad|anger|neutral|surprise)에 어울리는 곡 추천.
@@ -79,9 +81,7 @@ def make_music_recs(emotion: str, count: int = 5, locale: str | None = None) -> 
     if not _client_ok(): return []
 
     loc = (locale or MUSIC_LOCALE or "ko").lower()
-    # 한국어 강제·형식 강제 프롬프트
     korean_rule = "반드시 한국어로만 작성하세요. 영어 문장/설명 금지." if loc == "ko" else "Return in the requested locale."
-
     prefer_kr = ""
     if KOREAN_FIRST and loc == "ko":
         prefer_kr = "가능하면 한국 가요(국내 아티스트/한국어 가사)를 우선 추천하세요. 해외곡이 더 적합하면 1곡 정도는 허용합니다."
@@ -99,14 +99,7 @@ def make_music_recs(emotion: str, count: int = 5, locale: str | None = None) -> 
 - {prefer_kr}
 
 출력은 **JSON 배열만** 반환하세요. 설명/코드블록/추가문구 금지.
-
-예시:
-[
-  {{"title":"블루밍","artist":"아이유","reason":"밝은 무드가 기쁨과 잘 어울려요.","link":"https://www.youtube.com/watch?v=D1PvIWdJ8xo"}},
-  {{"title":"사건의 지평선","artist":"윤하","reason":"경쾌한 리듬이 마음을 가볍게 해줘요.","link":"https://www.youtube.com/watch?v=rPgaYeq9NvI"}}
-]
 """
-
     try:
         rsp = _client.chat.completions.create(
             model=MODEL,
@@ -120,7 +113,6 @@ def make_music_recs(emotion: str, count: int = 5, locale: str | None = None) -> 
 
         # 코드블록 제거
         if txt.startswith("```"):
-            # ```json ... ``` 형태 처리
             lines = [ln for ln in txt.splitlines() if not ln.strip().startswith("```")]
             txt = "\n".join(lines).strip()
 
@@ -133,8 +125,51 @@ def make_music_recs(emotion: str, count: int = 5, locale: str | None = None) -> 
             link = (it.get("link") or "").strip()
             if title and artist:
                 out.append({"title": title, "artist": artist, "reason": reason, "link": link})
-        # 요청 개수로 컷
         return out[:max(1, count)]
     except Exception:
-        # 파싱 실패 시 빈 리스트 (서버에서 기본곡으로 보완됨)
         return []
+
+
+# ================= 활동 추천 (Today 화면용) =================
+def make_action_recs(emotion: str, count: int = 3) -> List[str]:
+    """
+    감정(emotion: joy|sad|anger|neutral|surprise)에 어울리는 실천/행동 제안
+    TodayEmotionScreen의 '활동추천' 섹션과 연동됨
+    """
+    # GPT 사용 가능한 경우
+    if _client_ok():
+        prompt = f"""
+당신은 감정 기반 라이프 코치입니다.
+현재 감정: {emotion}
+요청:
+- 짧고 구체적인 한국어 행동 제안 {count}개를 목록으로 작성
+- 각 문장은 15자 내외, 따뜻하고 실천 가능한 표현 (예: '따뜻한 차 한잔 마시기')
+- 코드블록, 숫자, 불릿 기호 없이 문장만 나열
+"""
+        try:
+            rsp = _client.chat.completions.create(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a concise, positive Korean life coach."},
+                    {"role": "user", "content": prompt.strip()},
+                ],
+                temperature=0.7,
+            )
+            txt = (rsp.choices[0].message.content or "").strip()
+            lines = [ln.strip("-• ").strip() for ln in txt.splitlines() if ln.strip()]
+            # 너무 길면 잘라냄
+            out = [ln for ln in lines if 2 <= len(ln) <= 30][:count]
+            if out:
+                return out
+        except Exception:
+            pass
+
+    # GPT 미사용 시 기본 추천 반환
+    defaults = {
+        "joy": ["좋았던 순간을 메모로 남기기", "가벼운 산책하며 기분 유지하기"],
+        "sad": ["따뜻한 차 마시며 휴식하기", "친한 사람에게 짧은 안부 메시지 보내기"],
+        "anger": ["5분 복식호흡으로 긴장 풀기", "빠르게 걷기/가벼운 스트레칭 10분"],
+        "surprise": ["새로운 음악 한 곡 탐색하기", "오늘의 놀란 순간 간단 기록하기"],
+        "neutral": ["짧은 스트레칭으로 몸 깨우기", "좋아하는 음악 1곡 듣기"]
+    }
+    return defaults.get(emotion, defaults["neutral"])

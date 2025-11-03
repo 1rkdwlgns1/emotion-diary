@@ -34,7 +34,7 @@ class AnalysisResultScreen extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(label),
+              Text(label, style: const TextStyle(fontSize: 15)),
               const Spacer(),
               Text(_pct(v), style: const TextStyle(color: Colors.black54)),
             ],
@@ -57,7 +57,7 @@ class AnalysisResultScreen extends StatelessWidget {
     );
   }
 
-  /// GPT 원문에서 '행동1~3' 라인 제거
+  /// GPT 피드백에서 행동 문장 제거
   String _stripActions(String? raw) {
     if (raw == null) return '';
     final regex = RegExp(r'^행동\s*[1-3]\s*[:：].*$', multiLine: true);
@@ -67,52 +67,47 @@ class AnalysisResultScreen extends StatelessWidget {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    return lines.join('\n'); // 전체 그대로 보여줌
+    return lines.join('\n');
   }
 
-  /// 서버 응답 or 이미 정규화된 데이터 흡수
+  /// 서버 응답 데이터 정규화
   Map<String, dynamic> _normalize(Map<String, dynamic> raw) {
+    // ✅ Node 중계형 구조 (Flutter에서 바로 받은 경우)
     if (raw.containsKey('emotionData') && raw.containsKey('mainEmotion')) {
       return {
         'emotionData': Map<String, double>.from(raw['emotionData'] as Map),
         'mainEmotion': (raw['mainEmotion'] as String?) ?? '불확실',
         'gptFeedback': (raw['gptFeedback'] ?? raw['feedback'] ?? '') as String,
         'confidence': (raw['confidence'] as num?)?.toDouble() ?? 0.0,
+        'user_id': raw['user_id'],
+        'media_id': raw['media_id'],
       };
     }
 
+    // ✅ Flask 원본 구조
     final Map<String, dynamic> r = raw['result'] is Map
         ? Map<String, dynamic>.from(raw['result'])
         : raw;
-    final type = (r['type'] ?? '') as String;
 
+    final type = (r['type'] ?? '') as String;
     Map<String, dynamic> dist = {};
+
     if (type == 'video') {
       final fused = (r['fused'] ?? {}) as Map<String, dynamic>;
-      dist =
-          (fused['distribution'] ?? fused['fused'] ?? {})
-              as Map<String, dynamic>;
-      if (dist.isEmpty) {
-        dist =
-            (r['face']?['distribution'] ??
-                    r['text']?['distribution'] ??
-                    r['face']?['scores5'] ??
-                    {})
-                as Map<String, dynamic>;
-      }
+      dist = (fused['distribution'] ??
+              fused['fused'] ??
+              r['face']?['distribution'] ??
+              r['text']?['distribution'] ??
+              {}) as Map<String, dynamic>;
     } else if (type == 'audio') {
       dist = (r['text']?['distribution'] ?? {}) as Map<String, dynamic>;
     } else if (type == 'image') {
-      dist =
-          (r['face']?['distribution'] ?? r['face']?['scores5'] ?? {})
-              as Map<String, dynamic>;
+      dist = (r['face']?['distribution'] ?? {}) as Map<String, dynamic>;
     }
 
     double _toPct(num v) =>
-        (v.toDouble() <= 1.001 ? v.toDouble() * 100.0 : v.toDouble()).clamp(
-          0,
-          100,
-        );
+        (v.toDouble() <= 1.001 ? v.toDouble() * 100.0 : v.toDouble())
+            .clamp(0, 100);
     final Map<String, double> emotionData = {
       '기쁨': _toPct(dist['joy'] ?? 0),
       '슬픔': _toPct(dist['sad'] ?? 0),
@@ -128,32 +123,38 @@ class AnalysisResultScreen extends StatelessWidget {
       mainKo = s.first.key;
     }
 
-    final gptFeedback = (r['feedback'] ?? '') as String;
-    final confidence = (r['fused']?['confidence'] as num?)?.toDouble() ?? 0.0;
-
     return {
       'emotionData': emotionData,
       'mainEmotion': mainKo,
-      'gptFeedback': gptFeedback,
-      'confidence': confidence,
+      'gptFeedback': (r['feedback'] ?? '') as String,
+      'confidence': (r['fused']?['confidence'] as num?)?.toDouble() ?? 0.0,
+      'user_id': raw['context']?['user_id'] ??
+          raw['userId'] ??
+          r['user_id'] ??
+          r['context']?['user_id'],
+      'media_id': raw['context']?['media_id'] ??
+          raw['mediaId'] ??
+          r['media_id'] ??
+          r['context']?['media_id'],
     };
   }
 
   @override
   Widget build(BuildContext context) {
     final norm = _normalize(result);
-    final Map<String, double> ed = Map<String, double>.from(
-      norm['emotionData'] as Map,
-    );
+    final Map<String, double> ed =
+        Map<String, double>.from(norm['emotionData'] as Map);
     final mainKo = norm['mainEmotion'] as String;
-
     final String gptRaw = (norm['gptFeedback'] as String?) ?? '';
     final String gptSummaryOnly = _stripActions(gptRaw);
+
+    final userId = norm['user_id'];
+    final mediaId = norm['media_id'];
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('분석 완료'),
+        title: const Text('분석 결과'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0.5,
@@ -161,6 +162,20 @@ class AnalysisResultScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ----- 메인 감정 타이틀 -----
+          Center(
+            child: Text(
+              '오늘의 감정: $mainKo',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: mainGreen,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ----- 감정 분포 바 그래프 -----
           const Text(
             '감정 분석 결과',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -185,6 +200,7 @@ class AnalysisResultScreen extends StatelessWidget {
           ),
           const SizedBox(height: 18),
 
+          // ----- GPT 피드백 -----
           if (gptSummaryOnly.isNotEmpty) ...[
             const Text(
               '피드백',
@@ -204,10 +220,9 @@ class AnalysisResultScreen extends StatelessWidget {
                   const Icon(Icons.chat_bubble_outline, color: Colors.black87),
                   const SizedBox(width: 10),
                   Expanded(
-                    // ✅ 더보기 없이 전체 피드백 표시
                     child: Text(
                       gptSummaryOnly,
-                      style: const TextStyle(height: 1.6),
+                      style: const TextStyle(height: 1.6, fontSize: 15),
                     ),
                   ),
                 ],
@@ -216,6 +231,7 @@ class AnalysisResultScreen extends StatelessWidget {
             const SizedBox(height: 16),
           ],
 
+          // ----- 버튼 -----
           Row(
             children: [
               Expanded(
@@ -241,7 +257,19 @@ class AnalysisResultScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const TodayEmotionScreen(),
+                        builder: (_) => TodayEmotionScreen(
+                          userId: userId,
+                          mediaId: mediaId,
+                          mainEmotion: mainKo,
+                          feedback: gptSummaryOnly,
+                          emotionDist: {
+                            'joy': (ed['기쁨'] ?? 0) / 100.0,
+                            'sad': (ed['슬픔'] ?? 0) / 100.0,
+                            'anger': (ed['분노'] ?? 0) / 100.0,
+                            'surprise': (ed['놀람'] ?? 0) / 100.0,
+                            'neutral': (ed['평온'] ?? 0) / 100.0,
+                          },
+                        ),
                       ),
                     );
                   },

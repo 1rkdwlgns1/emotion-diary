@@ -115,3 +115,10 @@ whisper_cache/
 
 # ===== 컨테이너/가상화 산출물 =====
 docker-data/
+
+
+# ===== Node (main-server) =====
+main-server/node_modules/
+main-server/.env
+main-server/uploads/
+main-server/logs/

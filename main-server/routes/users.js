@@ -12,32 +12,31 @@ router.post("/register", async (req, res) => {
     const { email, password, nickname } = req.body;
 
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ ok: false, message: "이메일과 비밀번호를 입력하세요." });
+      return res.status(400).json({
+        ok: false,
+        message: "이메일과 비밀번호를 입력하세요.",
+      });
     }
 
-    const [rows] = await pool
-      .promise()
-      .query("SELECT * FROM users WHERE email = ?", [email]);
+    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [
+      email,
+    ]);
     if (rows.length > 0) {
-      return res
-        .status(409)
-        .json({ ok: false, message: "이미 존재하는 이메일입니다." });
+      return res.status(409).json({
+        ok: false,
+        message: "이미 존재하는 이메일입니다.",
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    await pool
-      .promise()
-      .query(
-        "INSERT INTO users (email, password_hash, nickname) VALUES (?, ?, ?)",
-        [email, hashedPassword, nickname || null]
-      );
+    await pool.query(
+      "INSERT INTO users (email, password_hash, nickname) VALUES (?, ?, ?)",
+      [email, hashedPassword, nickname]
+    );
 
     res.json({ ok: true, message: "회원가입 성공!" });
   } catch (err) {
-    console.error("회원가입 오류:", err);
+    console.error("❌ 회원가입 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -46,16 +45,15 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) {
       return res
         .status(400)
         .json({ ok: false, message: "이메일과 비밀번호를 입력하세요." });
     }
 
-    const [rows] = await pool
-      .promise()
-      .query("SELECT * FROM users WHERE email = ?", [email]);
+    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [
+      email,
+    ]);
     if (rows.length === 0) {
       return res
         .status(401)
@@ -87,7 +85,7 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("로그인 오류:", err);
+    console.error("❌ 로그인 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -104,16 +102,14 @@ router.put("/me", verifyToken, async (req, res) => {
         .json({ ok: false, message: "필수 정보가 누락되었습니다." });
     }
 
-    await pool
-      .promise()
-      .query(
-        "UPDATE users SET nickname = ?, gender = ?, age = ?, mbti = ? WHERE user_id = ?",
-        [nickname || null, gender, age, mbti, user_id]
-      );
+    await pool.query(
+      "UPDATE users SET nickname=?, gender=?, age=?, mbti=? WHERE user_id=?",
+      [nickname, gender, age, mbti, user_id]
+    );
 
     res.json({ ok: true, message: "프로필 업데이트 성공!" });
   } catch (err) {
-    console.error("프로필 업데이트 오류:", err);
+    console.error("❌ 프로필 업데이트 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -122,12 +118,10 @@ router.put("/me", verifyToken, async (req, res) => {
 router.get("/me", verifyToken, async (req, res) => {
   try {
     const { user_id } = req.user;
-    const [rows] = await pool
-      .promise()
-      .query(
-        "SELECT user_id, email, nickname, created_at FROM users WHERE user_id = ?",
-        [user_id]
-      );
+    const [rows] = await pool.query(
+      "SELECT user_id, email, nickname, created_at FROM users WHERE user_id=?",
+      [user_id]
+    );
     if (rows.length === 0) {
       return res
         .status(404)
@@ -135,16 +129,16 @@ router.get("/me", verifyToken, async (req, res) => {
     }
     res.json({ ok: true, user: rows[0] });
   } catch (err) {
-    console.error("내 정보 조회 오류:", err);
+    console.error("❌ 내 정보 조회 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-/* ✅ 관심사 저장 (users ↔ interests 연결) */
+/* ✅ 관심사 저장 */
 router.post("/interests", verifyToken, async (req, res) => {
   try {
     const { user_id } = req.user;
-    const { interests } = req.body; // ["운동", "음악 감상", "독서"]
+    const { interests } = req.body;
 
     if (!Array.isArray(interests) || interests.length === 0) {
       return res
@@ -152,41 +146,32 @@ router.post("/interests", verifyToken, async (req, res) => {
         .json({ ok: false, message: "관심사를 1개 이상 선택하세요." });
     }
 
-    // 1️⃣ 관심사 테이블에 없는 값은 새로 추가
     for (const name of interests) {
-      await pool
-        .promise()
-        .query(
-          "INSERT IGNORE INTO interests (interest_name) VALUES (?)",
-          [name]
-        );
+      await pool.query(
+        "INSERT IGNORE INTO interests (interest_name) VALUES (?)",
+        [name]
+      );
     }
 
-    // 2️⃣ 기존 연결 삭제 후 새로 저장
-    await pool
-      .promise()
-      .query("DELETE FROM user_interests WHERE user_id = ?", [user_id]);
+    await pool.query("DELETE FROM user_interests WHERE user_id=?", [user_id]);
 
     for (const name of interests) {
-      const [rows] = await pool
-        .promise()
-        .query("SELECT interest_id FROM interests WHERE interest_name = ?", [
-          name,
-        ]);
+      const [rows] = await pool.query(
+        "SELECT interest_id FROM interests WHERE interest_name=?",
+        [name]
+      );
       if (rows.length > 0) {
-        const interestId = rows[0].interest_id;
-        await pool
-          .promise()
-          .query(
-            "INSERT INTO user_interests (user_id, interest_id) VALUES (?, ?)",
-            [user_id, interestId]
-          );
+        const id = rows[0].interest_id;
+        await pool.query(
+          "INSERT INTO user_interests (user_id, interest_id) VALUES (?, ?)",
+          [user_id, id]
+        );
       }
     }
 
     res.json({ ok: true, message: "관심사 저장 완료!" });
   } catch (err) {
-    console.error("관심사 저장 오류:", err);
+    console.error("❌ 관심사 저장 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

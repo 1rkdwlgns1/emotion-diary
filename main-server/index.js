@@ -1,39 +1,48 @@
 // index.js
 import express from "express";
-import dotenv from "dotenv";
-import pool from "./db.js"; // 방금 만든 db 연결 재사용
 import cors from "cors";
+import dotenv from "dotenv";
+import bodyParser from "body-parser";
+import mediaRoutes from "./routes/media.js";
+import analysisRoutes from "./routes/analysis.js";
 import userRoutes from "./routes/users.js";
-import diaryRoutes from "./routes/diaries.js";
-
+import pool from "./db.js";
 
 dotenv.config();
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ✅ 미들웨어
 app.use(cors());
-
-// 바디 JSON 파싱
 app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
+// ✅ 라우트 연결
+app.use("/media", mediaRoutes);
+app.use("/analysis", analysisRoutes);
 app.use("/users", userRoutes);
-app.use("/diaries", diaryRoutes);
 
-
-// 서버 살아있는지 체크
+// ✅ 서버 테스트
 app.get("/", (req, res) => {
-  res.send("✅ Emotion Diary API Server Running!");
+  res.json({ ok: true, message: "Emotion Diary Node API is running" });
 });
 
-// DB 연결도 같이 체크
-app.get("/health", (req, res) => {
-  pool.query("SELECT 1 AS ok", (err, rows) => {
-    if (err) return res.status(500).json({ ok: false, error: err.message });
-    res.json({ ok: true, db: rows[0].ok }); // { ok: true, db: 1 }
-  });
-});
+// ✅ DB 연결 테스트
+(async () => {
+  try {
+    const conn = await pool.getConnection();
+    console.log("✅ MySQL 연결 성공");
+    conn.release();
+  } catch (err) {
+    console.error("❌ MySQL 연결 실패:", err.message);
+  }
+})();
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+// ✅ 서버 실행
+//app.listen(PORT, () => {
+//  console.log(`✅ Server running at http://localhost:${PORT}`);
+//});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running at http://0.0.0.0:${PORT}`);
 });

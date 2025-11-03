@@ -1,4 +1,5 @@
-import mysql from "mysql2";
+// db.js
+import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -8,16 +9,18 @@ const pool = mysql.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
+  port: process.env.DB_PORT || 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 });
 
-pool.getConnection((err, connection) => {
-  if (err) {
-    console.error("❌ MySQL 연결 실패:", err.message);
-  } else {
-    console.log("✅ MySQL 연결 성공!");
-    connection.release();
-  }
-});
+try {
+  const conn = await pool.getConnection();
+  console.log("✅ MySQL 연결 성공 (Promise 버전)");
+  conn.release();
+} catch (err) {
+  console.error("❌ MySQL 연결 실패:", err.message);
+}
 
 export default pool;

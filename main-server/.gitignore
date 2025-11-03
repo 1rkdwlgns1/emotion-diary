@@ -1,2 +1,6 @@
+# Node 전용 무시 파일
 node_modules/
 .env
+uploads/
+logs/
+package-lock.json
