@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'trash_gif_screen.dart';
 
 class TrashWarningScreen extends StatelessWidget {
   const TrashWarningScreen({super.key});
@@ -15,12 +16,11 @@ class TrashWarningScreen extends StatelessWidget {
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 1. 경고 문구 박스
+              // 경고 박스
               Container(
                 width: MediaQuery.of(context).size.width * 0.8,
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFE4D9),
                   borderRadius: BorderRadius.circular(16),
@@ -28,19 +28,35 @@ class TrashWarningScreen extends StatelessWidget {
                 child: const Text(
                   '이곳에 남긴 글은 절대 저장되지 않으며,\n복구도 불가능합니다.\n정말로 버리시겠습니까?',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
+                  style: TextStyle(
+                    fontSize: 16,
+                    height: 1.5,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
-              const SizedBox(height: 20), // 박스와 버튼 사이 간격
+              const SizedBox(height: 20),
 
-              // 2. 버튼들
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 버리기 버튼
+                  // 버리기
                   ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    onPressed: () async {
+                      final played = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(
+                          builder: (_) => TrashGifScreen(
+                            backgroundAsset: 'assets/back.png',
+                            gifAsset: 'assets/gifs/trash.gif',
+                            // 화면 머무는 시간은 필요 시 조정 (GIF 길이에 맞춰 2000~2600ms 권장)
+                            duration: const Duration(milliseconds: 2200),
+                            playNonce: DateTime.now().microsecondsSinceEpoch,
+                          ),
+                        ),
+                      );
+                      if (played == true && context.mounted) {
+                        Navigator.of(context).pop(true); // 경고창 닫기
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mainGreen,
@@ -52,10 +68,10 @@ class TrashWarningScreen extends StatelessWidget {
                     child: const Text('버리기'),
                   ),
                   const SizedBox(width: 20),
+
+                  // 취소
                   ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
+                    onPressed: () => Navigator.of(context).pop(false),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mainGreen,
                       foregroundColor: Colors.white,

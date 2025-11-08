@@ -9,12 +9,19 @@ import pool from "../db.js";
 dotenv.config();
 const router = express.Router();
 
+// ✅ 환경 변수 정리 (공백/개행 방지)
 const {
   AWS_ACCESS_KEY_ID,
   AWS_SECRET_ACCESS_KEY,
   AWS_REGION,
   AWS_S3_BUCKET,
-} = process.env;
+} = {
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID?.trim(),
+  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY?.trim(),
+  AWS_REGION: process.env.AWS_REGION?.trim(),
+  AWS_S3_BUCKET: process.env.AWS_S3_BUCKET?.trim(),
+};
+
 
 // ✅ S3 클라이언트 설정
 const s3 = new S3Client({

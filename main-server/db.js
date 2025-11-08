@@ -2,7 +2,7 @@
 import mysql from "mysql2/promise";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ path: "./.env" }); // ✅ MAIN-SERVER 내부 .env 명시
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -17,7 +17,7 @@ const pool = mysql.createPool({
 
 try {
   const conn = await pool.getConnection();
-  console.log("✅ MySQL 연결 성공 (Promise 버전)");
+  console.log("✅ MySQL 연결 성공:", process.env.DB_NAME, "at", process.env.DB_HOST);
   conn.release();
 } catch (err) {
   console.error("❌ MySQL 연결 실패:", err.message);

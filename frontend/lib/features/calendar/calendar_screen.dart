@@ -4,21 +4,13 @@ import 'dart:io' show HttpDate;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:table_calendar/table_calendar.dart';
-
-// ✅ 필요한 화면 클래스만 들여오기 (상수는 가져오지 않음)
 import 'day_emotion_screen.dart' show DayEmotionScreen;
 import 'week_emotion_report_pro.dart' show WeekEmotionReportProScreen;
 
-// ❌ 이 줄은 삭제 (이미 config.dart 삭제했으므로)
-// import '../../config.dart';
-
-// ✅ 여기서만 쓸 상수들을 이 파일 내에서 정의(실서버 IP 반영)
-const String kBaseUrl = 'http://10.0.2.2:5001';
-/*const String kBaseUrl = 'http://10.11.26.62:5001';*/
+const String kBaseUrl = 'http://10.0.2.2:3000'; // ✅ Node 서버 주소
 const String kUserId = 'anon';
 const Color kMainGreen = Color(0xFF859A7E);
 
-// 감정 키/라벨/색상
 const _keys = ['joy', 'sad', 'anger', 'neutral', 'surprise'];
 const _ko = {
   'joy': '기쁨',
@@ -50,34 +42,34 @@ class _Item {
     return DateTime.now();
   }
 
+  // ✅ Node DB 구조 맞게 emotion → emotion_detail 순서 조정
   factory _Item.fromJson(Map<String, dynamic> j) {
-    final raw = j['emotion'];
-    final emo = (raw is String) ? jsonDecode(raw) : (raw ?? {});
-    return _Item(Map<String, dynamic>.from(emo), _safeParse(j['created_at']));
+    dynamic raw = j['emotion'] ?? j['emotion_detail'];
+    if (raw == null || (raw is String && raw.trim().isEmpty)) {
+      raw = j['emotion_detail'] ?? j['emotion'];
+    }
+
+    if (raw is String) {
+      try {
+        raw = jsonDecode(raw);
+      } catch (_) {
+        raw = {};
+      }
+    }
+
+    if (raw is Map && raw.containsKey('joy')) {
+      return _Item(Map<String, dynamic>.from(raw), _safeParse(j['created_at']));
+    } else {
+      final emo = (raw is Map)
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
+      return _Item(emo, _safeParse(j['created_at']));
+    }
   }
 }
 
 String _dkey(DateTime d) =>
     "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-
-String? _topMood(Map<String, dynamic> emo) {
-  Map dist =
-      (emo['fused']?['distribution']) ??
-      (emo['text']?['distribution']) ??
-      (emo['face']?['distribution']) ??
-      {};
-  if (dist is! Map) return null;
-  String? bestK;
-  double bestV = -1;
-  for (final k in _keys) {
-    final v = dist[k];
-    if (v is num && v.toDouble() > bestV) {
-      bestV = v.toDouble();
-      bestK = k;
-    }
-  }
-  return bestK;
-}
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -87,16 +79,12 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focused = DateTime.now();
-
-  // 단일/범위 선택 상태
   DateTime? _selected;
   DateTime? _rangeStart;
   DateTime? _rangeEnd;
   RangeSelectionMode _rangeMode = RangeSelectionMode.toggledOff;
 
-  // 해당 월의 dateKey → topMood
   Map<String, String> _moodByDay = {};
-
   bool _loading = false;
   String? _error;
 
@@ -107,7 +95,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _loadMonth(_focused);
   }
 
-  // 기존 _loadMonth 전체를 이 버전으로 교체
   Future<void> _loadMonth(DateTime month) async {
     setState(() {
       _loading = true;
@@ -126,18 +113,38 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     try {
       final r = await http.get(uri);
+
+      if (r.statusCode == 404 ||
+          r.body.trim().isEmpty ||
+          r.body.trim() == '[]') {
+        setState(() {
+          _moodByDay = {};
+          _loading = false;
+        });
+        return;
+      }
+
       if (r.statusCode != 200) {
         throw Exception('HTTP ${r.statusCode}: ${r.body}');
       }
 
       final List raw = jsonDecode(r.body);
+      if (raw.isEmpty) {
+        setState(() {
+          _moodByDay = {};
+          _loading = false;
+        });
+        return;
+      }
+
       final items = raw.map((j) => _Item.fromJson(j)).toList();
 
-      // ---- [핵심 변경] 날짜별 분포 누적/평균 → 지배 감정 결정 ----
-      // acc[dateKey] = { 'joy': sum, 'sad': sum, ..., '__n__': count }
       final Map<String, Map<String, double>> acc = {};
-
       Map<String, double>? _extractDist(Map<String, dynamic> emo) {
+        if (emo.isEmpty) return null;
+        if (emo.keys.toSet().containsAll(_keys)) {
+          return emo.map((k, v) => MapEntry(k, (v as num).toDouble()));
+        }
         final m =
             (emo['fused']?['distribution']) ??
             (emo['text']?['distribution']) ??
@@ -152,10 +159,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       }
 
       for (final it in items) {
-        final key = _dkey(it.createdAt.toLocal());
+        final key = _dkey(it.createdAt);
         final dist = _extractDist(it.emotion);
         if (dist == null) continue;
-
         acc.putIfAbsent(
           key,
           () => {for (final k in _keys) k: 0.0, '__n__': 0.0},
@@ -166,15 +172,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
         acc[key]!['__n__'] = acc[key]!['__n__']! + 1.0;
       }
 
-      // 평균 내서 지배 감정 뽑기
-      final map = <String, String>{}; // dateKey -> topMood
+      final map = <String, String>{};
       acc.forEach((dateKey, sums) {
         final n = sums['__n__'] ?? 0.0;
         if (n <= 0) return;
         String bestK = _keys.first;
-        double bestV = -1.0;
+        double bestV = -1;
         for (final k in _keys) {
-          final avg = (sums[k]! / n); // 0~1
+          final avg = sums[k]! / n;
           if (avg > bestV) {
             bestV = avg;
             bestK = k;
@@ -187,9 +192,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _moodByDay = map;
       });
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-      });
+      if (!e.toString().contains('404')) {
+        setState(() {
+          _error = e.toString();
+        });
+      }
     } finally {
       setState(() {
         _loading = false;
@@ -197,7 +204,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
   }
 
-  // 날짜 탭 → 범위 선택 토글
   void _onDayTapped(DateTime sel, DateTime foc) {
     setState(() {
       _focused = foc;
@@ -224,7 +230,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  // 단일 선택으로 전환하고 싶을 때
   void _selectSingle(DateTime sel, DateTime foc) {
     setState(() {
       _rangeMode = RangeSelectionMode.toggledOff;
@@ -235,9 +240,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  // 주간 범위 얻기
   DateTime _weekStartOf(DateTime d) =>
-      d.subtract(Duration(days: d.weekday % 7)); // 일요일 시작
+      d.subtract(Duration(days: d.weekday % 7));
   DateTime _weekEndOf(DateTime d) =>
       _weekStartOf(d).add(const Duration(days: 6));
 
@@ -346,7 +350,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         );
                       },
                       defaultBuilder: (context, day, focusedDay) =>
-                          _dayCell(context, day, isOutside: false),
+                          _dayCell(context, day),
                       outsideBuilder: (context, day, focusedDay) =>
                           _dayCell(context, day, isOutside: true),
                       todayBuilder: (context, day, _) =>
@@ -362,22 +366,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ),
                   ),
                 ),
-
                 if (_loading)
                   const Padding(
                     padding: EdgeInsets.only(top: 6),
                     child: LinearProgressIndicator(minHeight: 2),
                   ),
-
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      '에러: $_error',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
-
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
                   child: Align(
@@ -396,8 +389,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ),
                   ),
                 ),
-
-                // 색상 범례
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 4,
@@ -431,8 +422,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ],
             ),
           ),
-
-          // 하단 고정 버튼바
           SafeArea(
             top: false,
             child: Container(
@@ -444,7 +433,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     child: SizedBox(
                       height: 46,
                       child: ElevatedButton(
-                        onPressed: _onTapWeekly, // ✅ 네비 연결
+                        onPressed: _onTapWeekly,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: kMainGreen,
                           foregroundColor: Colors.white,
@@ -465,7 +454,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     child: SizedBox(
                       height: 46,
                       child: ElevatedButton(
-                        onPressed: _onTapDaily, // ✅ 네비 연결
+                        onPressed: _onTapDaily,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: kMainGreen,
                           foregroundColor: Colors.white,
@@ -490,7 +479,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  // 날짜 셀
   Widget _dayCell(
     BuildContext context,
     DateTime day, {
@@ -557,7 +545,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return base;
   }
 
-  // ====== 네비게이션 구현 ======
   void _onTapWeekly() {
     final (start, end) = _currentRangeForWeekly();
     Navigator.push(

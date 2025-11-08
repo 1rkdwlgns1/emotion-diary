@@ -3,9 +3,12 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import bodyParser from "body-parser";
+
 import mediaRoutes from "./routes/media.js";
 import analysisRoutes from "./routes/analysis.js";
 import userRoutes from "./routes/users.js";
+import resultsRoutes from "./routes/results.js";  // ✅ 추가됨!
+
 import pool from "./db.js";
 
 dotenv.config();
@@ -21,6 +24,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/media", mediaRoutes);
 app.use("/analysis", analysisRoutes);
 app.use("/users", userRoutes);
+app.use("/", resultsRoutes); // ✅ 추가: /results/... 경로 연결
 
 // ✅ 서버 테스트
 app.get("/", (req, res) => {
@@ -39,10 +43,12 @@ app.get("/", (req, res) => {
 })();
 
 // ✅ 서버 실행
-//app.listen(PORT, () => {
-//  console.log(`✅ Server running at http://localhost:${PORT}`);
-//});
-
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ Server running at http://0.0.0.0:${PORT}`);
+});
+
+console.log("✅ ENV 테스트:", {
+  DB_NAME: process.env.DB_NAME,
+  AWS_REGION: process.env.AWS_REGION,
+  BUCKET: process.env.AWS_S3_BUCKET,
 });

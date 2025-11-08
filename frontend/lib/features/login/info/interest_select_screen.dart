@@ -1,5 +1,7 @@
+// lib/features/login/info/interest_select_screen.dart
 import 'package:flutter/material.dart';
-import 'package:capstone/services/api_service.dart';
+import '../../../../core/user_api.dart'; // ✅ 수정된 경로
+
 import '../../main_tab/main_tab_screen.dart';
 
 class InterestSelectScreen extends StatefulWidget {
@@ -132,7 +134,7 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
                     }
 
                     try {
-                      final res = await ApiService.saveInterests(selected);
+                      final res = await UserApi.saveInterests(selected);
 
                       if (res['ok'] == true) {
                         ScaffoldMessenger.of(context).showSnackBar(

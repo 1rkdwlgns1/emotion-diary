@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'trash_warning_screen.dart'; // ✨ 경고 화면 import
+import 'trash_warning_screen.dart';
 
 // lerpDouble 대체
 double _lerp(num a, num b, double t) => a + (b - a) * t;
@@ -22,34 +22,41 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
     super.dispose();
   }
 
-  // 👇👇 이 함수가 수정되었습니다.
-  void _submit() {
+  // ✅ 수정된 부분: pop() 호출 없이 입력만 비우고 현재 화면 유지
+  Future<void> _submit() async {
     final text = _controller.text.trim();
     if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('버릴 감정을 입력해 주세요.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('버릴 감정을 입력해 주세요.')));
       return;
     }
 
-    // 일반적인 페이지 이동이 아닌, 투명한 배경의 팝업 페이지로 이동
-    Navigator.of(context).push(
+    // 투명 팝업(경고) → '버리기' 선택 시 GIF 재생 → true 반환
+    final ok = await Navigator.of(context).push<bool>(
       PageRouteBuilder(
-        opaque: false, // 이전 페이지가 비치도록 설정
+        opaque: false,
         pageBuilder: (context, animation, secondaryAnimation) {
           return const TrashWarningScreen();
         },
-        // 부드러운 전환 효과
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
+          return FadeTransition(opacity: animation, child: child);
         },
       ),
     );
-  }
 
+    if (ok == true) {
+      // DB 저장 없이 즉시 비움 + 화면 유지
+      FocusScope.of(context).unfocus(); // 키보드 닫기(선택)
+      _controller.clear();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('감정을 비웠어요.')));
+      // ❌ Navigator.pop(...) 하지 않음 — 현재 페이지 그대로 유지
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +75,7 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 상단 이미지 박스
+              // 상단 이미지
               Align(
                 alignment: Alignment.topCenter,
                 child: Container(
@@ -87,8 +94,14 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
-                          width: 72, height: 72, color: Colors.grey[300],
-                          child: const Icon(Icons.error, size: 40, color: Colors.red),
+                          width: 72,
+                          height: 72,
+                          color: Colors.grey[300],
+                          child: const Icon(
+                            Icons.error,
+                            size: 40,
+                            color: Colors.red,
+                          ),
                         );
                       },
                     ),
@@ -97,7 +110,7 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 테두리
+              // 자글자글 테두리 + 입력창
               Expanded(
                 child: CustomPaint(
                   painter: _RoughRoundedRectPainter(
@@ -164,10 +177,7 @@ class _TrashMultilineField extends StatelessWidget {
       maxLines: null,
       expands: true,
       textAlignVertical: TextAlignVertical.top,
-      decoration: const InputDecoration(
-        hintText: '',
-        border: InputBorder.none,
-      ),
+      decoration: const InputDecoration(hintText: '', border: InputBorder.none),
       style: const TextStyle(fontSize: 16),
     );
   }
@@ -202,48 +212,55 @@ class _RoughRoundedRectPainter extends CustomPainter {
 
       final r = radius;
       const segments = 46;
-
       final points = <Offset>[];
 
-      // 상변: (r,0) → (w-r,0)
+      // 상
       for (int s = 0; s <= segments; s++) {
         final t = s / segments;
         final x = _lerp(r, rect.width - r, t);
         const y = 0.0;
-        points.add(Offset(
-          x + (rnd.nextDouble() * 2 - 1) * jitter,
-          y + (rnd.nextDouble() * 2 - 1) * jitter,
-        ));
+        points.add(
+          Offset(
+            x + (rnd.nextDouble() * 2 - 1) * jitter,
+            y + (rnd.nextDouble() * 2 - 1) * jitter,
+          ),
+        );
       }
-      // 우변: (w,r) → (w,h-r)
+      // 우
       for (int s = 0; s <= segments; s++) {
         final t = s / segments;
         final x = rect.width;
         final y = _lerp(r, rect.height - r, t);
-        points.add(Offset(
-          x + (rnd.nextDouble() * 2 - 1) * jitter,
-          y + (rnd.nextDouble() * 2 - 1) * jitter,
-        ));
+        points.add(
+          Offset(
+            x + (rnd.nextDouble() * 2 - 1) * jitter,
+            y + (rnd.nextDouble() * 2 - 1) * jitter,
+          ),
+        );
       }
-      // 하변: (w-r,h) → (r,h)
+      // 하
       for (int s = 0; s <= segments; s++) {
         final t = s / segments;
         final x = _lerp(rect.width - r, r, t);
         final y = rect.height;
-        points.add(Offset(
-          x + (rnd.nextDouble() * 2 - 1) * jitter,
-          y + (rnd.nextDouble() * 2 - 1) * jitter,
-        ));
+        points.add(
+          Offset(
+            x + (rnd.nextDouble() * 2 - 1) * jitter,
+            y + (rnd.nextDouble() * 2 - 1) * jitter,
+          ),
+        );
       }
-      // 좌변: (0,h-r) → (0,r)
+      // 좌
       for (int s = 0; s <= segments; s++) {
         final t = s / segments;
         const x = 0.0;
         final y = _lerp(rect.height - r, r, t);
-        points.add(Offset(
-          x + (rnd.nextDouble() * 2 - 1) * jitter,
-          y + (rnd.nextDouble() * 2 - 1) * jitter,
-        ));
+        points.add(
+          Offset(
+            x + (rnd.nextDouble() * 2 - 1) * jitter,
+            y + (rnd.nextDouble() * 2 - 1) * jitter,
+          ),
+        );
       }
 
       if (points.isNotEmpty) {
@@ -260,8 +277,8 @@ class _RoughRoundedRectPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RoughRoundedRectPainter old) =>
       old.radius != radius ||
-          old.color != color ||
-          old.layers != layers ||
-          old.jitter != jitter ||
-          old.strokeWidth != strokeWidth;
+      old.color != color ||
+      old.layers != layers ||
+      old.jitter != jitter ||
+      old.strokeWidth != strokeWidth;
 }

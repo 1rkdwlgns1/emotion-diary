@@ -1,6 +1,7 @@
+// lib/features/login/info/info_input_screen.dart
 import 'package:flutter/services.dart'; // ✅ 텍스트 필터링용
 import 'package:flutter/material.dart';
-import '../../../services/api_service.dart';
+import '../../../../core/user_api.dart'; // ✅ 수정된 경로
 import 'interest_select_screen.dart';
 
 class InfoInputScreen extends StatefulWidget {
@@ -258,7 +259,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                       final selectedMbti = mbti;
 
                       // ✅ 서버에 업데이트 요청
-                      final res = await ApiService.updateProfile(
+                      final res = await UserApi.updateProfile(
                         nickname: nicknameController.text.trim(),
                         gender: selectedGender,
                         age: selectedAge,

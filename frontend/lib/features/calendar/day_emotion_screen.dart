@@ -2,13 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-// ==== 서버 환경 ====
-const String kBaseUrl = 'http://10.0.2.2:5001';
-/*const String kBaseUrl = 'http://10.11.26.62:5001';*/
+const String kBaseUrl = 'http://10.0.2.2:3000'; // ✅ Node 서버
 const String kUserId = 'anon';
 const Color kMainGreen = Color(0xFF859A7E);
 
-// 감정 키와 한글명
 const _ko = {
   'joy': '기쁨',
   'sad': '슬픔',
@@ -16,8 +13,6 @@ const _ko = {
   'neutral': '평온',
   'surprise': '놀람',
 };
-
-// 감정별 색상 / 배경 그라디언트
 const _barColors = {
   'joy': Color(0xFFFFCF66),
   'sad': Color(0xFF70B9FF),
@@ -25,8 +20,7 @@ const _barColors = {
   'neutral': Color(0xFFBDE4B1),
   'surprise': Color(0xFFBBA7FF),
 };
-
-const _bgGradients = <String, List<Color>>{
+const _bgGradients = {
   'joy': [Color(0xFFFFF6D8), Colors.white],
   'sad': [Color(0xFFEAF4FF), Colors.white],
   'anger': [Color(0xFFFFEEF0), Colors.white],
@@ -53,71 +47,48 @@ class _DayEmotionScreenState extends State<DayEmotionScreen> {
   }
 
   Future<_DayData> _fetchDay(DateTime day) async {
-    String _fmt(DateTime d) =>
-        "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+    String fmt(DateTime d) =>
+        "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+
     final uri = Uri.parse(
-      '$kBaseUrl/results/day?date=${_fmt(day)}&user_id=$kUserId',
+      "$kBaseUrl/results/day?date=${fmt(day)}&user_id=$kUserId",
     );
 
-    final r = await http.get(uri);
-    if (r.statusCode != 200) {
-      throw Exception('HTTP ${r.statusCode}: ${r.body}');
-    }
+    try {
+      final res = await http.get(uri);
+      if (res.statusCode != 200) return _DayData.empty();
 
-    final List raw = jsonDecode(r.body);
-    if (raw.isEmpty) {
+      final json = jsonDecode(res.body);
+      if (json is! Map || json['ok'] != true) return _DayData.empty();
+
+      // ✅ Node는 영어 key로 반환하므로 영어로 매핑
+      final avgRaw = json['avg_distribution'] ?? {};
+      final avg = <String, double>{};
+      for (final k in _ko.keys) {
+        final v = avgRaw[k];
+        avg[k] = (v is num) ? v.toDouble() : 0.0;
+      }
+
+      // ✅ 대표 감정 찾기
+      String top = 'neutral';
+      double best = -1;
+      avg.forEach((k, v) {
+        if (v > best) {
+          best = v;
+          top = k;
+        }
+      });
+
+      final fb = (json['latest_feedback'] ?? '').toString().trim();
+      final summary = fb.isNotEmpty ? fb : _defaultSummary(top);
+
+      return _DayData(date: day, dist: avg, topKey: top, feedback: summary);
+    } catch (e) {
+      debugPrint("❌ _fetchDay 오류: $e");
       return _DayData.empty();
     }
-
-    // 감정 평균 계산
-    Map<String, double> dist = {for (final k in _ko.keys) k: 0.0};
-    int n = 0;
-    String? feedback;
-
-    for (final row in raw) {
-      final emoRaw = row['emotion'];
-      final emo = (emoRaw is String)
-          ? jsonDecode(emoRaw)
-          : (emoRaw ?? {}) as Map;
-      final fused =
-          (emo['fused']?['distribution']) ??
-          (emo['text']?['distribution']) ??
-          (emo['face']?['distribution']);
-      if (fused is Map) {
-        for (final k in _ko.keys) {
-          final v = fused[k];
-          if (v is num) dist[k] = dist[k]! + v.toDouble();
-        }
-        n++;
-      }
-      if (emo['feedback'] is String && (emo['feedback'] as String).isNotEmpty) {
-        feedback = emo['feedback'];
-      }
-    }
-
-    if (n > 0) {
-      for (final k in _ko.keys) {
-        dist[k] = (dist[k]! / n).clamp(0.0, 1.0);
-      }
-    }
-
-    // 주요 감정 결정
-    String topKey = 'neutral';
-    double best = 0.0;
-    for (final k in _ko.keys) {
-      if (dist[k]! > best) {
-        best = dist[k]!;
-        topKey = k;
-      }
-    }
-
-    // 피드백 요약 (3줄 제한)
-    final summary = _shortenTo3Lines(feedback ?? _defaultSummary(topKey));
-
-    return _DayData(date: day, dist: dist, topKey: topKey, feedback: summary);
   }
 
-  // === 기본 피드백 ===
   String _defaultSummary(String key) {
     const msg = {
       'joy': '기쁨이 가득한 하루였어요. 밝은 에너지가 주변에도 전해졌겠어요.',
@@ -127,12 +98,6 @@ class _DayEmotionScreenState extends State<DayEmotionScreen> {
       'surprise': '놀람이 있었던 하루네요. 새로운 경험이 당신을 성장시켜요.',
     };
     return msg[key] ?? '오늘의 감정을 차분히 돌아보며 마무리해요.';
-  }
-
-  String _shortenTo3Lines(String s) {
-    final one = s.replaceAll('\r', '').replaceAll('\n', ' ').trim();
-    if (one.length <= 80) return one;
-    return one.substring(0, 80) + '…';
   }
 
   @override
@@ -145,10 +110,8 @@ class _DayEmotionScreenState extends State<DayEmotionScreen> {
             body: Center(child: CircularProgressIndicator(color: kMainGreen)),
           );
         }
-        if (snap.hasError) {
-          return Scaffold(body: Center(child: Text('에러: ${snap.error}')));
-        }
-        final d = snap.data!;
+
+        final d = snap.data ?? _DayData.empty();
         final grad = _bgGradients[d.topKey] ?? _bgGradients['neutral']!;
 
         return Scaffold(
@@ -174,46 +137,8 @@ class _DayEmotionScreenState extends State<DayEmotionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ===== 감정 피드백 카드 =====
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.black12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x10000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          "${_ko[d.topKey]} 감정이 중심이 된 하루예요 🌿",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          d.feedback,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            height: 1.6,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _FeedbackCard(d: d),
                   const SizedBox(height: 24),
-
-                  // ===== 감정 그래프 =====
                   const Text(
                     '감정 분석 결과',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
@@ -226,10 +151,7 @@ class _DayEmotionScreenState extends State<DayEmotionScreen> {
                       value: d.dist[k]!,
                     ),
                   ),
-
                   const SizedBox(height: 30),
-
-                  // ===== 한 줄 메모 =====
                   const Text(
                     '오늘의 한 줄 메모',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
@@ -249,15 +171,11 @@ class _DayEmotionScreenState extends State<DayEmotionScreen> {
                       contentPadding: const EdgeInsets.all(12),
                     ),
                   ),
-
                   const SizedBox(height: 30),
-
-                  // ===== 확인 버튼 =====
                   SizedBox(
                     height: 46,
                     child: ElevatedButton(
                       onPressed: () {
-                        FocusScope.of(context).unfocus();
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('감정 일기가 저장되었어요.'),
@@ -290,7 +208,41 @@ class _DayEmotionScreenState extends State<DayEmotionScreen> {
   }
 }
 
-// ===== 막대 위젯 =====
+class _FeedbackCard extends StatelessWidget {
+  final _DayData d;
+  const _FeedbackCard({required this.d});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            "${_ko[d.topKey]} 감정이 중심이 된 하루예요 🌿",
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            d.feedback,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EmotionBar extends StatelessWidget {
   final String label;
   final Color color;
@@ -347,7 +299,6 @@ class _EmotionBar extends StatelessWidget {
   }
 }
 
-// ===== 내부 데이터 구조 =====
 class _DayData {
   final DateTime date;
   final Map<String, double> dist;

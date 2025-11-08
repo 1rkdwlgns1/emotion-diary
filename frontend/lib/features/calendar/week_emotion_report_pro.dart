@@ -5,9 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 // ==== 서버 환경 ====
-const String kBaseUrl = 'http://10.0.2.2:5001';
-/*const String kBaseUrl = 'http://10.11.26.62:5001';*/
-
+const String kBaseUrl = 'http://10.0.2.2:3000'; // ✅ Node 서버
 const String kUserId = 'anon';
 const Color kMainGreen = Color(0xFF859A7E);
 
@@ -28,8 +26,8 @@ const _lineColors = {
   'surprise': Color(0xFFBBA7FF),
 };
 
-// 오늘 화면과 동일한 파스텔 배경
-const _bgGradients = <String, List<Color>>{
+// 배경 그라디언트
+const _bgGradients = {
   'joy': [Color(0xFFFFF6D8), Colors.white],
   'sad': [Color(0xFFEAF4FF), Colors.white],
   'anger': [Color(0xFFFFEEF0), Colors.white],
@@ -37,7 +35,6 @@ const _bgGradients = <String, List<Color>>{
   'surprise': [Color(0xFFF1EBFF), Colors.white],
 };
 
-// === 옵션: 주간 피드백을 전체 표시할지 여부 (요청: 전체 표시)
 const bool kWeeklyShowFullFeedback = true;
 
 class _Item {
@@ -56,9 +53,18 @@ class _Item {
   }
 
   factory _Item.fromJson(Map<String, dynamic> j) {
-    final raw = j['emotion'];
-    final emo = (raw is String) ? jsonDecode(raw) : (raw ?? {});
-    return _Item(Map<String, dynamic>.from(emo), _safeParse(j['created_at']));
+    dynamic raw = j['emotion'] ?? j['emotion_detail'];
+    if (raw is String) {
+      try {
+        raw = jsonDecode(raw);
+      } catch (_) {
+        raw = {};
+      }
+    }
+    return _Item(
+      Map<String, dynamic>.from(raw ?? {}),
+      _safeParse(j['created_at']),
+    );
   }
 }
 
@@ -92,119 +98,120 @@ class _WeekEmotionReportProScreenState
   String _rangeKo(DateTime s, DateTime e) =>
       "${s.year}년 ${s.month}월 ${s.day}일 ~ ${e.year}년 ${e.month}월 ${e.day}일";
 
-  // GPT가 보내는 '행동1:' 같은 줄 제거 (요약은 하지 않음)
   String _stripActions(String s) {
     if (s.isEmpty) return s;
     final keep = <String>[];
     for (final ln in s.split('\n')) {
       final t = ln.trimLeft();
-      final isAction =
-          RegExp(
-            r'^(행동\s*\d+[:\.]|Action\s*\d+[:\.]|- \[[ xX]\]|•)',
-            caseSensitive: false,
-          ).hasMatch(t) ||
-          t.startsWith('행동:') ||
-          t.startsWith('추천 행동') ||
-          t.startsWith('실천 팁') ||
-          t.startsWith('Action:');
+      final isAction = RegExp(
+        r'^(행동\s*\d+[:\.]|Action\s*\d+[:\.]|- \[[ xX]\]|•)',
+        caseSensitive: false,
+      ).hasMatch(t);
       if (!isAction && t.isNotEmpty) keep.add(ln);
     }
     return keep.join('\n').trim();
   }
 
   Future<_WeekData> _fetch(DateTime s, DateTime e) async {
-    // 1) 차트 데이터
-    final uriRange = Uri.parse(
-      '$kBaseUrl/results/range?start=${_fmt(s)}&end=${_fmt(e)}&user_id=$kUserId',
-    );
-    final r = await http.get(uriRange);
-    if (r.statusCode != 200) {
-      throw Exception('HTTP ${r.statusCode}: ${r.body}');
-    }
-    final List raw = jsonDecode(r.body);
-    final items = raw.map((j) => _Item.fromJson(j)).toList();
-
-    // 날짜 리스트
-    final days = <DateTime>[];
-    for (int i = 0; i <= e.difference(s).inDays; i++) {
-      days.add(DateTime(s.year, s.month, s.day).add(Duration(days: i)));
-    }
-
-    // 날짜별 평균
-    Map<String, Map<String, double>> acc = {};
-    String dk(DateTime d) =>
-        "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-    for (final it in items) {
-      final fused =
-          (it.emotion['fused']?['distribution']) ??
-          (it.emotion['text']?['distribution']) ??
-          (it.emotion['face']?['distribution']) ??
-          {};
-      if (fused is! Map) continue;
-      final key = dk(it.createdAt.toLocal());
-      acc.putIfAbsent(key, () => {for (final k in _keys) k: 0.0, '__n__': 0.0});
-      for (final k in _keys) {
-        final v = fused[k];
-        if (v is num) acc[key]![k] = acc[key]![k]! + v.toDouble();
-      }
-      acc[key]!['__n__'] = acc[key]!['__n__']! + 1.0;
-    }
-
-    final series = <String, List<double>>{
-      for (final k in _keys) k: List.filled(days.length, 0.0),
-    };
-    for (int i = 0; i < days.length; i++) {
-      final key = dk(days[i]);
-      if (!acc.containsKey(key) || (acc[key]!['__n__'] ?? 0) == 0) continue;
-      final n = acc[key]!['__n__']!;
-      for (final k in _keys) {
-        series[k]![i] = (acc[key]![k]! / n).clamp(0.0, 1.0);
-      }
-    }
-
-    // 2) 주간 요약 + 평균 분포
-    String summary = "";
-    Map<String, double> avg = {for (final k in _keys) k: 0.0};
-    String dominant = 'neutral';
-
-    final uriWeekly = Uri.parse(
-      '$kBaseUrl/report/weekly?start=${_fmt(s)}&end=${_fmt(e)}&user_id=$kUserId',
-    );
     try {
-      final rw = await http.get(uriWeekly);
-      if (rw.statusCode == 200) {
-        final m = jsonDecode(rw.body) as Map<String, dynamic>;
-        final fb = (m['gpt_feedback'] ?? '').toString();
-        // ★ 행동 줄 제거만 하고, 줄임 없이 전체 표시
-        summary = kWeeklyShowFullFeedback
-            ? _stripActions(fb)
-            : _stripActions(fb);
-        final ad = Map<String, dynamic>.from(m['avg_distribution'] ?? {});
-        for (final k in _keys) {
-          final v = ad[k];
-          if (v is num) avg[k] = v.toDouble();
-        }
-        dominant = _keys.reduce((a, b) => (avg[a]! >= avg[b]!) ? a : b);
-      } else {
-        summary = "해당 기간의 감정을 요약했어요. 그래프를 참고해 변화를 살펴보세요.";
-        final tmp = {for (final k in _keys) k: 0.0};
-        for (final k in _keys) {
-          tmp[k] = series[k]!.isEmpty
-              ? 0.0
-              : series[k]!.reduce((p, c) => p + c) / series[k]!.length;
-        }
-        dominant = _keys.reduce((a, b) => (tmp[a]! >= tmp[b]!) ? a : b);
+      // 1️⃣ 감정 분포 데이터
+      final uriRange = Uri.parse(
+        '$kBaseUrl/results/range?start=${_fmt(s)}&end=${_fmt(e)}&user_id=$kUserId',
+      );
+      final r = await http.get(uriRange);
+      if (r.statusCode != 200) {
+        throw Exception("HTTP ${r.statusCode}: ${r.body}");
       }
-    } catch (_) {
-      summary = "해당 기간의 감정을 요약했어요. 그래프를 참고해 변화를 살펴보세요.";
-    }
 
-    return _WeekData(
-      days: days,
-      series: series,
-      summaryText: summary,
-      dominantKey: dominant,
-    );
+      final List raw = jsonDecode(r.body);
+      final items = raw.map((j) => _Item.fromJson(j)).toList();
+
+      // 날짜 리스트 생성
+      final days = <DateTime>[];
+      for (int i = 0; i <= e.difference(s).inDays; i++) {
+        days.add(DateTime(s.year, s.month, s.day).add(Duration(days: i)));
+      }
+
+      // 날짜별 평균
+      Map<String, Map<String, double>> acc = {};
+      String dk(DateTime d) =>
+          "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+      for (final it in items) {
+        final fused =
+            (it.emotion['fused']?['distribution']) ??
+            (it.emotion['distribution']) ??
+            (it.emotion['text']?['distribution']) ??
+            (it.emotion['face']?['distribution']) ??
+            // ✅ Node에서 바로 5개 감정키(joy/sad/anger/neutral/surprise)로 오는 경우
+            (it.emotion.containsKey('joy') ? it.emotion : {});
+        if (fused is! Map) continue;
+        final key = dk(it.createdAt);
+        acc.putIfAbsent(
+          key,
+          () => {for (final k in _keys) k: 0.0, '__n__': 0.0},
+        );
+        for (final k in _keys) {
+          final v = fused[k];
+          if (v is num) acc[key]![k] = acc[key]![k]! + v.toDouble();
+        }
+        acc[key]!['__n__'] = acc[key]!['__n__']! + 1.0;
+      }
+
+      final series = <String, List<double>>{
+        for (final k in _keys) k: List.filled(days.length, 0.0),
+      };
+      for (int i = 0; i < days.length; i++) {
+        final key = dk(days[i]);
+        if (!acc.containsKey(key) || (acc[key]!['__n__'] ?? 0) == 0) continue;
+        final n = acc[key]!['__n__']!;
+        for (final k in _keys) {
+          // ✅ 0~1 → 퍼센트 변환
+          series[k]![i] = ((acc[key]![k]! / n) * 100).clamp(0.0, 100.0);
+        }
+      }
+
+      // 2️⃣ ✅ Flask → Node /report/weekly 호출
+      final uriWeekly = Uri.parse(
+        '$kBaseUrl/report/weekly?start=${_fmt(s)}&end=${_fmt(e)}&user_id=$kUserId',
+      );
+      String summary = "";
+      Map<String, double> avg = {for (final k in _keys) k: 0.0};
+      String dominant = 'neutral';
+
+      try {
+        final rw = await http.get(uriWeekly);
+        if (rw.statusCode == 200) {
+          final m = jsonDecode(rw.body) as Map<String, dynamic>;
+          final fb = (m['gpt_feedback'] ?? '').toString();
+          summary = _stripActions(fb);
+
+          // ✅ Node에서 이미 0~100 단위이므로 /100 제거
+          // ✅ Node에서 이미 0~100 단위 그대로 사용
+          final ad = Map<String, dynamic>.from(m['avg_distribution'] ?? {});
+          for (final k in _keys) {
+            final v = ad[k];
+            if (v is num) avg[k] = v.toDouble(); // ✅ 수정 완료
+          }
+
+          dominant = _keys.reduce((a, b) => (avg[a]! >= avg[b]!) ? a : b);
+        } else {
+          summary = "해당 기간의 감정을 요약했어요. 그래프를 참고해 변화를 살펴보세요.";
+        }
+      } catch (e) {
+        debugPrint("❌ 주간 요약 요청 오류: $e");
+        summary = "해당 기간의 감정을 요약했어요. 그래프를 참고해 변화를 살펴보세요.";
+      }
+
+      return _WeekData(
+        days: days,
+        series: series,
+        summaryText: summary,
+        dominantKey: dominant,
+      );
+    } catch (err) {
+      debugPrint("❌ _fetch 오류: $err");
+      rethrow;
+    }
   }
 
   @override
@@ -220,6 +227,7 @@ class _WeekEmotionReportProScreenState
         if (snap.hasError) {
           return Scaffold(body: Center(child: Text('에러: ${snap.error}')));
         }
+
         final d = snap.data!;
         final grad = _bgGradients[d.dominantKey] ?? _bgGradients['neutral']!;
 
@@ -236,9 +244,9 @@ class _WeekEmotionReportProScreenState
           body: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
+                colors: grad,
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: grad,
               ),
             ),
             child: SingleChildScrollView(
@@ -255,15 +263,12 @@ class _WeekEmotionReportProScreenState
                     ),
                   ),
                   const SizedBox(height: 12),
-
                   _ChartCard(days: d.days, series: d.series),
                   const SizedBox(height: 8),
                   _LegendBar(),
                   const SizedBox(height: 12),
-
                   _SummaryCard(text: d.summaryText),
                   const SizedBox(height: 18),
-
                   SizedBox(
                     height: 46,
                     child: ElevatedButton(
@@ -301,7 +306,8 @@ class _ChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     List<FlSpot> _spots(List<double> a) =>
-        List.generate(a.length, (i) => FlSpot(i.toDouble(), (a[i] * 100.0)));
+        List.generate(a.length, (i) => FlSpot(i.toDouble(), a[i]));
+
     String _tick(int i) =>
         (i < 0 || i >= days.length) ? '' : '${days[i].month}.${days[i].day}';
 
@@ -465,14 +471,8 @@ class _SummaryCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              text,
-              softWrap: true, // ★ 전체 줄바꿈 허용
-              // maxLines 지정 없음 → 전체 표시
-              style: const TextStyle(
-                fontSize: 14.5,
-                height: 1.5,
-                color: Colors.black87,
-              ),
+              text.isNotEmpty ? text : "이번 주 감정 데이터를 불러오지 못했습니다.",
+              style: const TextStyle(fontSize: 14.5, height: 1.5),
             ),
           ),
         ],
@@ -483,7 +483,7 @@ class _SummaryCard extends StatelessWidget {
 
 class _WeekData {
   final List<DateTime> days;
-  final Map<String, List<double>> series; // 0~1
+  final Map<String, List<double>> series;
   final String summaryText;
   final String dominantKey;
   _WeekData({

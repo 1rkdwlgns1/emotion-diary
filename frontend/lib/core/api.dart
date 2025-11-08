@@ -1,3 +1,4 @@
+// lib/core/api.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -6,7 +7,7 @@ import 'package:http/http.dart' as http;
 /// 에뮬레이터: http://10.0.2.2:5001
 /// 실기기: http://<PC_IP>:5001
 /*const String kBaseUrl = 'http://10.0.2.2:5001';*/
-const String kBaseUrl = 'http://10.11.26.62:5001';
+const String kBaseUrl = 'http://10.0.2.2:3000';
 const String kUserId = 'anon';
 
 /// 분석 결과 모델
@@ -46,7 +47,7 @@ class AnalysisItem {
 class AnalysisApi {
   /// 파일 업로드 + 분석
   static Future<Map<String, dynamic>> uploadFile(File file) async {
-    final uri = Uri.parse('$kBaseUrl/analyze/file');
+    final uri = Uri.parse('$kBaseUrl/analysis/file');
     final req = http.MultipartRequest('POST', uri)
       ..files.add(await http.MultipartFile.fromPath('file', file.path))
       ..fields['user_id'] = kUserId;

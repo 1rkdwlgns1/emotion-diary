@@ -1,6 +1,5 @@
+// lib/features/home/home_screen.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:capstone/providers/user_provider.dart';
 import '../camera/camera_screen.dart';
 import 'loading_screen.dart';
 
@@ -14,11 +13,43 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   static const mainGreen = Color(0xFF859A7E);
 
+  Future<void> _onCapturePressed() async {
+    final String? path = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute(builder: (_) => const CameraScreen()),
+    );
+
+    if (!mounted || path == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => LoadingScreen(imagePath: path)),
+    );
+  }
+
+  /// ✅ 메시지 도착 시 홈 화면 위에 다이얼로그로 띄우는 함수
+  void showIncomingMessage(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text(
+          '📩 $title',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('닫기', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final userId = userProvider.userId ?? 0;
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -45,26 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 260,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () async {
-                    // ✅ 카메라 화면으로 이동 → 촬영이 끝나면 path 반환
-                    final path = await Navigator.push<String?>(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CameraScreen()),
-                    );
-
-                    // ✅ 반환된 경로로 로딩 화면 진입 (userId 함께 전달)
-                    if (path != null && mounted) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => LoadingScreen(
-                            imagePath: path,
-                            userId: userId, // ✅ 필수: 여기서 전달
-                          ),
-                        ),
-                      );
-                    }
-                  },
+                  onPressed: _onCapturePressed,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: mainGreen,
                     foregroundColor: Colors.white,

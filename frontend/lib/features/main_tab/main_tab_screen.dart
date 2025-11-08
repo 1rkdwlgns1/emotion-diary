@@ -1,3 +1,4 @@
+// lib/features/main_tab/main_tab_screen.dart
 import 'package:flutter/material.dart';
 import '../home/home_screen.dart';
 import '../user/screens/user_screen.dart';
@@ -7,14 +8,23 @@ import '../calendar/calendar_screen.dart';
 const tabIconNames = ['home', 'calendar', 'contents', 'user'];
 
 class MainTabScreen extends StatefulWidget {
-  const MainTabScreen({super.key});
+  const MainTabScreen({super.key, this.initialIndex = 0}); // ✅
+  final int initialIndex; // ✅
+
   @override
   State<MainTabScreen> createState() => _MainTabScreenState();
 }
 
 class _MainTabScreenState extends State<MainTabScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex; // ✅
+
   final labels = ['홈', '캘린더', '콘텐츠', '사용자'];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex; // ✅
+  }
 
   void _go(int idx) => setState(() => _currentIndex = idx);
   void _goCalendar() => _go(1);
@@ -29,7 +39,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
       case 2:
         return const ContentsHomeView();
       case 3:
-        // ← 콜백만 내려보냄. UI는 UserScreen 안에서 그대로 유지됨.
         return UserScreen(onGoCalendar: _goCalendar, onGoContents: _goContents);
       default:
         return const HomeScreen();
@@ -87,7 +96,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
                                 height: 28,
                                 width: 1.2,
                                 color: Colors.grey[300],
-                                alignment: Alignment.center,
                               ),
                             ]
                           : [widget];
