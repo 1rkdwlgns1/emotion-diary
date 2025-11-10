@@ -60,13 +60,12 @@ class AnalysisApi {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
-  /// 하루 조회
-  static Future<List<AnalysisItem>> fetchDay(String date) async {
+  /// 하루 조회 ✅ 수정됨 — (List → Map)
+  static Future<Map<String, dynamic>> fetchDay(String date) async {
     final url = Uri.parse('$kBaseUrl/results/day?date=$date&user_id=$kUserId');
     final r = await http.get(url);
     if (r.statusCode != 200) throw Exception(r.body);
-    final list = jsonDecode(r.body) as List;
-    return list.map((e) => AnalysisItem.fromJson(e)).toList();
+    return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
   /// 기간 조회 (주간)

@@ -98,20 +98,7 @@ class _WeekEmotionReportProScreenState
   String _rangeKo(DateTime s, DateTime e) =>
       "${s.year}년 ${s.month}월 ${s.day}일 ~ ${e.year}년 ${e.month}월 ${e.day}일";
 
-  String _stripActions(String s) {
-    if (s.isEmpty) return s;
-    final keep = <String>[];
-    for (final ln in s.split('\n')) {
-      final t = ln.trimLeft();
-      final isAction = RegExp(
-        r'^(행동\s*\d+[:\.]|Action\s*\d+[:\.]|- \[[ xX]\]|•)',
-        caseSensitive: false,
-      ).hasMatch(t);
-      if (!isAction && t.isNotEmpty) keep.add(ln);
-    }
-    return keep.join('\n').trim();
-  }
-
+  // ✅ _stripActions 제거 (피드백 삭제 방지)
   Future<_WeekData> _fetch(DateTime s, DateTime e) async {
     try {
       // 1️⃣ 감정 분포 데이터
@@ -132,17 +119,17 @@ class _WeekEmotionReportProScreenState
         days.add(DateTime(s.year, s.month, s.day).add(Duration(days: i)));
       }
 
-      // 날짜별 평균
+      // 날짜별 평균 계산
       Map<String, Map<String, double>> acc = {};
       String dk(DateTime d) =>
           "${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+
       for (final it in items) {
         final fused =
             (it.emotion['fused']?['distribution']) ??
             (it.emotion['distribution']) ??
             (it.emotion['text']?['distribution']) ??
             (it.emotion['face']?['distribution']) ??
-            // ✅ Node에서 바로 5개 감정키(joy/sad/anger/neutral/surprise)로 오는 경우
             (it.emotion.containsKey('joy') ? it.emotion : {});
         if (fused is! Map) continue;
         final key = dk(it.createdAt);
@@ -165,32 +152,34 @@ class _WeekEmotionReportProScreenState
         if (!acc.containsKey(key) || (acc[key]!['__n__'] ?? 0) == 0) continue;
         final n = acc[key]!['__n__']!;
         for (final k in _keys) {
-          // ✅ 0~1 → 퍼센트 변환
           series[k]![i] = ((acc[key]![k]! / n) * 100).clamp(0.0, 100.0);
         }
       }
 
       // 2️⃣ ✅ Flask → Node /report/weekly 호출
       final uriWeekly = Uri.parse(
-        '$kBaseUrl/report/weekly?start=${_fmt(s)}&end=${_fmt(e)}&user_id=$kUserId',
+        '$kBaseUrl/results/report/weekly?start=${_fmt(s)}&end=${_fmt(e)}&user_id=$kUserId',
       );
+
       String summary = "";
       Map<String, double> avg = {for (final k in _keys) k: 0.0};
       String dominant = 'neutral';
 
       try {
         final rw = await http.get(uriWeekly);
+        debugPrint("📩 Weekly response: ${rw.body}"); // 로그 확인용
+
         if (rw.statusCode == 200) {
           final m = jsonDecode(rw.body) as Map<String, dynamic>;
-          final fb = (m['gpt_feedback'] ?? '').toString();
-          summary = _stripActions(fb);
 
-          // ✅ Node에서 이미 0~100 단위이므로 /100 제거
-          // ✅ Node에서 이미 0~100 단위 그대로 사용
+          // ✅ 피드백 텍스트 직접 읽기
+          summary = (m['gpt_feedback'] ?? "").toString().trim();
+
+          // ✅ 평균 감정 분포
           final ad = Map<String, dynamic>.from(m['avg_distribution'] ?? {});
           for (final k in _keys) {
             final v = ad[k];
-            if (v is num) avg[k] = v.toDouble(); // ✅ 수정 완료
+            if (v is num) avg[k] = v.toDouble();
           }
 
           dominant = _keys.reduce((a, b) => (avg[a]! >= avg[b]!) ? a : b);

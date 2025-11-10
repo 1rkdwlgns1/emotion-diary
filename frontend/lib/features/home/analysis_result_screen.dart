@@ -59,6 +59,7 @@ class AnalysisResultScreen extends StatelessWidget {
     );
   }
 
+  // ✅ 피드백 문장에서 "행동 1~3" 제거
   String _stripActions(String? raw) {
     if (raw == null) return '';
     final regex = RegExp(r'^행동\s*[1-3]\s*[:：].*$', multiLine: true);
@@ -71,12 +72,15 @@ class AnalysisResultScreen extends StatelessWidget {
     return lines.join('\n');
   }
 
+  // ✅ GPT 원문 + 정제본 모두 포함시켜서 다음 화면에 넘김
   Map<String, dynamic> _normalize(Map<String, dynamic> raw) {
+    // Node or Flask의 구조에 맞게 표준화
     if (raw.containsKey('emotionData') && raw.containsKey('mainEmotion')) {
       return {
         'emotionData': Map<String, double>.from(raw['emotionData']),
         'mainEmotion': raw['mainEmotion'] ?? '불확실',
         'gptFeedback': raw['gptFeedback'] ?? '',
+        'music': raw['music'] ?? [],
       };
     }
 
@@ -96,16 +100,18 @@ class AnalysisResultScreen extends StatelessWidget {
       '평온': (dist['neutral'] ?? 0) * 100,
     };
 
-    String mainKo = '불확실';
     final sorted = emotionData.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    mainKo = sorted.first.key;
+    final mainKo = sorted.first.key;
 
     final gptFeedback = (r['feedback'] ?? '') as String;
+    final music = (r['music'] ?? raw['music'] ?? []) as List;
+
     return {
       'emotionData': emotionData,
       'mainEmotion': mainKo,
-      'gptFeedback': gptFeedback,
+      'gptFeedback': gptFeedback, // 원문 (행동 포함)
+      'music': music,
     };
   }
 
@@ -115,7 +121,7 @@ class AnalysisResultScreen extends StatelessWidget {
     final ed = Map<String, double>.from(norm['emotionData']);
     final mainKo = norm['mainEmotion'];
     final gptRaw = (norm['gptFeedback'] ?? '') as String;
-    final gptSummaryOnly = _stripActions(gptRaw);
+    final gptSummaryOnly = _stripActions(gptRaw); // 피드백 요약만
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -133,6 +139,8 @@ class AnalysisResultScreen extends StatelessWidget {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
+
+          // 감정 분포 바 그래프
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
@@ -150,8 +158,10 @@ class AnalysisResultScreen extends StatelessWidget {
               ],
             ),
           ),
+
           const SizedBox(height: 18),
 
+          // ✅ 피드백 (행동 제외)
           if (gptSummaryOnly.isNotEmpty) ...[
             const Text(
               '피드백',
@@ -172,7 +182,7 @@ class AnalysisResultScreen extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      gptSummaryOnly,
+                      gptSummaryOnly, // ✅ 행동 제거된 요약만 출력
                       style: const TextStyle(height: 1.6),
                     ),
                   ),
@@ -182,6 +192,7 @@ class AnalysisResultScreen extends StatelessWidget {
             const SizedBox(height: 16),
           ],
 
+          // 버튼 2개 (다시 찍기 / 다음)
           Row(
             children: [
               Expanded(
@@ -208,7 +219,7 @@ class AnalysisResultScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
-                            TodayEmotionScreen(result: norm), // ✅ 데이터 전달
+                            TodayEmotionScreen(result: norm), // ✅ 원본 전달
                       ),
                     );
                   },

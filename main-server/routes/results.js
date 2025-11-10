@@ -1,4 +1,3 @@
-// routes/results.js
 import express from "express";
 import pool from "../db.js";
 import axios from "axios";
@@ -6,70 +5,123 @@ import axios from "axios";
 const router = express.Router();
 
 /* =====================================================
-   🔸 JSON 안전 파서
+   ✅ 깊은 JSON 파서 (이중 인코딩 대응)
 ===================================================== */
-function safeParseEmotion(raw) {
-  if (!raw) return {};
+function deepParse(raw) {
   try {
-    if (typeof raw === "string") return JSON.parse(raw);
-    return raw;
+    let parsed = raw;
+    while (typeof parsed === "string") parsed = JSON.parse(parsed);
+    return parsed;
   } catch {
-    return {};
+    return raw;
   }
 }
 
 /* =====================================================
-   1️⃣ /results/day  (단일 날짜 감정 평균)
+   ✅ /day (오늘 감정 + GPT2 음악 병합 조회)
 ===================================================== */
-router.get("/results/day", async (req, res) => {
+router.get("/day", async (req, res) => {
   try {
-    const { date, user_id } = req.query;
-    if (!date || !user_id)
-      return res.status(400).json({ ok: false, message: "date 또는 user_id 누락" });
+    const { user_id, date } = req.query;
+    if (!user_id)
+      return res.status(400).json({ ok: false, message: "user_id 필요" });
 
+    const now = new Date();
+    const koreaTime = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const targetDate =
+      !date || date === "undefined" || date.trim() === ""
+        ? koreaTime.toISOString().split("T")[0]
+        : date;
+
+    console.log("🧩 /results/day called:", { user_id, targetDate });
+
+    /* 🎭 감정 분석 결과 조회 */
     const [rows] = await pool.query(
       `
-      SELECT emotion_detail, emotion, feedback, created_at
+      SELECT id, user_id, created_at, emotion, emotion_detail, feedback, actions
       FROM analysis_results
-      WHERE user_id=? AND DATE(created_at)=?
-      ORDER BY created_at ASC
+      WHERE user_id = ?
+        AND DATE(created_at) = DATE(?)
+      ORDER BY created_at DESC
+      LIMIT 1
       `,
-      [user_id, date]
+      [user_id, targetDate]
     );
 
-    if (rows.length === 0)
-      return res.status(404).json({ ok: false, message: "결과 없음", data: [] });
-
-    const keys = ["joy", "sad", "anger", "neutral", "surprise"];
-    const avg = Object.fromEntries(keys.map((k) => [k, 0]));
-    let feedback = "";
-
-    for (const r of rows) {
-      let emo =
-        Object.keys(safeParseEmotion(r.emotion_detail)).length > 0
-          ? safeParseEmotion(r.emotion_detail)
-          : safeParseEmotion(r.emotion);
-
-      let dist = {};
-      if (emo?.fused?.distribution) dist = emo.fused.distribution;
-      else if (emo?.distribution) dist = emo.distribution;
-      else if (emo?.fused) dist = emo.fused;
-      else if (emo) dist = emo;
-
-      for (const k of keys) {
-        if (typeof dist[k] === "number") avg[k] += dist[k];
-      }
-
-      if (r.feedback && !feedback) feedback = r.feedback;
+    if (!rows || rows.length === 0) {
+      console.log("❌ 오늘 감정 데이터 없음");
+      return res.json({ ok: false, message: "해당 날짜 데이터 없음" });
     }
 
-    keys.forEach((k) => (avg[k] = +(avg[k] / rows.length).toFixed(4)));
+    const latest = rows[0];
+    const emoRaw = deepParse(latest.emotion_detail || latest.emotion || {});
+    const dist =
+      emoRaw?.fused?.distribution ||
+      emoRaw?.distribution ||
+      emoRaw?.text?.distribution ||
+      emoRaw?.face?.distribution ||
+      {};
 
+    /* ✅ actions 복원 */
+    let actions = [];
+    if (latest.actions) {
+      const raw = latest.actions.trim();
+      if (raw.includes("\n")) actions = raw.split("\n").map((s) => s.trim());
+      else if (raw.includes(",")) actions = raw.split(",").map((s) => s.trim());
+      else actions = [raw];
+    }
+
+    /* 🎵 GPT2 음악 추천 최신 데이터 조회 */
+    let musicList = [];
+    try {
+      const [mrows] = await pool.query(
+        `
+        SELECT music_list
+        FROM analysis_results_gpt2
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [user_id]
+      );
+
+      if (mrows.length > 0 && mrows[0].music_list) {
+        const raw = mrows[0].music_list;
+        // ✅ 확실한 JSON 파싱 로직
+        if (typeof raw === "string") {
+          try {
+            musicList = JSON.parse(raw);
+          } catch {
+            musicList = deepParse(raw);
+          }
+        } else {
+          musicList = deepParse(raw);
+        }
+        if (!Array.isArray(musicList)) {
+          console.log("⚠️ music_list가 배열이 아님, 강제 변환 시도");
+          musicList = [musicList];
+        }
+        console.log(`✅ GPT2 음악 ${musicList.length}곡 로드 완료`);
+      } else {
+        console.log("⚠️ GPT2 음악 데이터 없음");
+      }
+    } catch (err) {
+      console.error("⚠️ gpt2 음악 불러오기 실패:", err.message);
+    }
+
+    /* ✅ 최종 응답 */
     res.json({
       ok: true,
-      total: rows.length,
-      avg_distribution: avg,
-      latest_feedback: feedback,
+      avg_distribution: {
+        joy: dist.joy || 0,
+        sad: dist.sad || 0,
+        anger: dist.anger || 0,
+        neutral: dist.neutral || 0,
+        surprise: dist.surprise || 0,
+      },
+      latest_feedback: latest.feedback || "",
+      actions,
+      music: Array.isArray(musicList) ? musicList : [],
     });
   } catch (err) {
     console.error("❌ /results/day 오류:", err);
@@ -78,9 +130,9 @@ router.get("/results/day", async (req, res) => {
 });
 
 /* =====================================================
-   2️⃣ /results/range  (캘린더용)
+   ✅ /range (캘린더용)
 ===================================================== */
-router.get("/results/range", async (req, res) => {
+router.get("/range", async (req, res) => {
   try {
     const { start, end, user_id } = req.query;
     if (!start || !end || !user_id)
@@ -90,34 +142,29 @@ router.get("/results/range", async (req, res) => {
       `
       SELECT emotion_detail, emotion, created_at
       FROM analysis_results
-      WHERE user_id=? AND DATE(created_at) BETWEEN ? AND ?
+      WHERE user_id = ?
+        AND DATE(CONVERT_TZ(created_at, '+00:00', '+09:00'))
+            BETWEEN DATE(?) AND DATE(?)
       ORDER BY created_at ASC
       `,
       [user_id, start, end]
     );
 
     if (rows.length === 0)
-      return res.status(404).json({ ok: false, message: "해당 기간 데이터 없음" });
+      return res.json({ ok: false, message: "해당 기간 데이터 없음" });
 
-    const list = rows.map((r) => {
-      let emo =
-        Object.keys(safeParseEmotion(r.emotion_detail)).length > 0
-          ? safeParseEmotion(r.emotion_detail)
-          : safeParseEmotion(r.emotion);
-
-      let dist = {};
-      if (emo?.fused?.distribution) dist = emo.fused.distribution;
-      else if (emo?.distribution) dist = emo.distribution;
-      else if (emo?.fused) dist = emo.fused;
-      else if (emo) dist = emo;
-
-      return {
-        emotion: dist,
-        created_at: r.created_at,
-      };
+    const result = rows.map((r) => {
+      const emoRaw = deepParse(r.emotion_detail || r.emotion || {});
+      const dist =
+        emoRaw?.fused?.distribution ||
+        emoRaw?.distribution ||
+        emoRaw?.text?.distribution ||
+        emoRaw?.face?.distribution ||
+        {};
+      return { emotion: dist, created_at: r.created_at };
     });
 
-    res.json(list);
+    res.json(result);
   } catch (err) {
     console.error("❌ /results/range 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
@@ -125,7 +172,7 @@ router.get("/results/range", async (req, res) => {
 });
 
 /* =====================================================
-   3️⃣ /report/weekly (Flask 주간 리포트 연동)
+   ✅ /report/weekly (Flask 연동)
 ===================================================== */
 router.get("/report/weekly", async (req, res) => {
   try {
@@ -133,15 +180,14 @@ router.get("/report/weekly", async (req, res) => {
     if (!start || !end || !user_id)
       return res.status(400).json({ ok: false, message: "start, end, user_id 필요" });
 
-    const flaskUrl =
-      process.env.FLASK_WEEKLY_URL || "http://127.0.0.1:5001/report/weekly";
+    const flaskUrl = "http://127.0.0.1:5001/report/weekly";
+    console.log("📡 Flask 주간 리포트 요청:", flaskUrl, { start, end, user_id });
 
-    const response = await axios.get(flaskUrl, {
-      params: { start, end, user_id },
-    });
+    const flaskRes = await axios.get(flaskUrl, { params: { start, end, user_id } });
+    const data = flaskRes.data || {};
+    const inner = data.result || data;
 
-    const data = response.data || {};
-    const distKo = data?.avg_distribution || {};
+    const distKo = inner.avg_distribution || {};
     const distEn = {
       joy: distKo["기쁨"] || 0,
       sad: distKo["슬픔"] || 0,
@@ -152,9 +198,9 @@ router.get("/report/weekly", async (req, res) => {
 
     res.json({
       ok: true,
-      count: data.count || 0,
+      count: inner.count || 0,
       avg_distribution: distEn,
-      gpt_feedback: data.gpt_feedback || "",
+      gpt_feedback: inner.gpt_feedback || "",
     });
   } catch (err) {
     console.error("❌ /report/weekly 오류:", err.message);

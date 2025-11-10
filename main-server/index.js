@@ -7,7 +7,7 @@ import bodyParser from "body-parser";
 import mediaRoutes from "./routes/media.js";
 import analysisRoutes from "./routes/analysis.js";
 import userRoutes from "./routes/users.js";
-import resultsRoutes from "./routes/results.js";  // ✅ 추가됨!
+import resultsRoutes from "./routes/results.js"; // ✅ 반드시 추가!!!
 
 import pool from "./db.js";
 
@@ -24,9 +24,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/media", mediaRoutes);
 app.use("/analysis", analysisRoutes);
 app.use("/users", userRoutes);
-app.use("/", resultsRoutes); // ✅ 추가: /results/... 경로 연결
+app.use("/results", resultsRoutes); // ✅ 여기 results.js 연결 (핵심)
 
-// ✅ 서버 테스트
+// ✅ 기본 라우트 테스트
 app.get("/", (req, res) => {
   res.json({ ok: true, message: "Emotion Diary Node API is running" });
 });

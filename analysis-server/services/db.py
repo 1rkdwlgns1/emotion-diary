@@ -35,11 +35,12 @@ def _is_mysql() -> bool:
 def get_results_in_range(user_id: str, start_date: str, end_date: str):
     """Node → Flask 주간 리포트용: 특정 유저의 감정 결과 조회"""
     try:
+        # ✅ 수정됨: DATE_ADD → DATE() 로 변경 (문자열 파라미터 안전 처리)
         q = text("""
             SELECT emotion_detail, emotion, created_at
             FROM analysis_results
             WHERE user_id = :uid
-              AND created_at BETWEEN :s AND DATE_ADD(:e, INTERVAL 1 DAY)
+              AND DATE(created_at) BETWEEN DATE(:s) AND DATE(:e)
             ORDER BY created_at ASC
         """)
         with engine.begin() as conn:

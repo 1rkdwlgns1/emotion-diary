@@ -1,11 +1,12 @@
-// lib/features/home/today_emotion_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 // ==== 서버 환경 ====
-const String kBaseUrl = 'http://10.0.2.2:3000'; // ✅ Node 서버
+const String kBaseUrl = 'http://10.0.2.2:3000'; // ✅ Node 서버 (감정, 피드백 등)
+const String kFlaskUrl = 'http://10.0.2.2:5001'; // ✅ Flask 서버 (음악 추천만)
+
 const String kUserId = 'anon';
 const Color kMainGreen = Color(0xFF859A7E);
 
@@ -27,7 +28,6 @@ const _chipBorder = {
   '놀람': Color(0xFFBBA7FF),
 };
 
-// 유튜브 링크 정리
 String _youtubeSearchUrl(String title, String artist) {
   final q = Uri.encodeComponent('$title $artist official audio');
   return 'https://m.youtube.com/results?search_query=$q';
@@ -41,16 +41,18 @@ String _normalizeYouTubeLink(String url) {
   return url;
 }
 
-// ===== 메인 =====
+// ===== 메인 위젯 =====
 class TodayEmotionScreen extends StatefulWidget {
-  final Map<String, dynamic>? result; // ✅ 분석 결과 직접 전달
+  final Map<String, dynamic>? result;
   const TodayEmotionScreen({super.key, this.result});
+
   @override
   State<TodayEmotionScreen> createState() => _TodayEmotionScreenState();
 }
 
 class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
   late Future<_TodayData> _future;
+  List<_Song> _songs = [];
 
   @override
   void initState() {
@@ -62,7 +64,6 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
     }
   }
 
-  // ✅ 분석 결과 직접 전달 시
   _TodayData _fromAnalysisResult(Map<String, dynamic> r) {
     final distRaw = Map<String, dynamic>.from(r['emotionData'] ?? {});
     final dist = {
@@ -74,25 +75,33 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
     };
 
     final topKey = _findTopKey(dist);
-    final feedback = (r['gptFeedback'] ?? '').toString().trim();
+
+    final feedback =
+        (r['gptFeedback'] ??
+                r['feedback'] ??
+                r['result']?['gptFeedback'] ??
+                r['result']?['feedback'] ??
+                '')
+            .toString()
+            .trim();
+
     final summary = _shortenTo3Lines(_stripActions(feedback));
-    final actions = _extractActions(feedback).isNotEmpty
+
+    final actionsRaw = r['actions'] ?? r['result']?['actions'] ?? [];
+    final actions = (actionsRaw is List && actionsRaw.isNotEmpty)
+        ? actionsRaw.map((e) => e.toString()).toList()
+        : _extractActions(feedback).isNotEmpty
         ? _extractActions(feedback)
         : _fallbackActions(topKey);
 
-    // 🚨 음악 데이터 안전하게 파싱
-    final musicRaw = r['music'] ?? r['result']?['music'] ?? [];
-    final songs = musicRaw is List
-        ? musicRaw
-              .map<_Song>(
-                (e) => _Song.fromMap(
-                  (e is Map<String, dynamic>)
-                      ? e
-                      : Map<String, dynamic>.from(e),
-                ),
-              )
-              .toList()
-        : <_Song>[];
+    final musicRaw =
+        r['music'] ??
+        r['result']?['music'] ??
+        r['flaskResponse']?['result']?['music'] ??
+        r['flaskResponse']?['music'] ?? // ✅ 이 줄 추가
+        [];
+
+    final songs = _parseMusicList(musicRaw);
 
     return _TodayData(
       dist: dist,
@@ -104,22 +113,30 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
     );
   }
 
-  // ✅ 오늘 감정 불러오기 (Node → /results/day)
+  // ✅ Node + Flask 통합
   Future<_TodayData> _fetchToday() async {
-    final date = DateTime.now().toIso8601String().split("T")[0];
-    final uri = Uri.parse('$kBaseUrl/results/day?user_id=$kUserId&date=$date');
+    final uri = Uri.parse('$kBaseUrl/results/day?user_id=$kUserId');
     final res = await http.get(uri);
+    debugPrint("🎧 Node 응답: ${res.body}");
 
-    if (res.statusCode != 200) {
-      throw Exception('서버 오류: ${res.statusCode}');
+    if (res.statusCode != 200) throw Exception('서버 오류: ${res.statusCode}');
+
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(res.body);
+      if (decoded is String) decoded = jsonDecode(decoded);
+    } catch (err) {
+      debugPrint("⚠️ JSON decode 오류: $err");
+      decoded = {};
     }
 
-    final decoded = jsonDecode(res.body);
-    if (decoded['avg_distribution'] == null) {
+    if (decoded == null || decoded['avg_distribution'] == null) {
       throw Exception('결과 없음');
     }
 
-    final distRaw = Map<String, dynamic>.from(decoded['avg_distribution']);
+    final distRaw = Map<String, dynamic>.from(
+      decoded['avg_distribution'] ?? {},
+    );
     final dist = {
       '기쁨': ((distRaw['기쁨'] ?? distRaw['joy'] ?? 0) as num).toDouble(),
       '슬픔': ((distRaw['슬픔'] ?? distRaw['sad'] ?? 0) as num).toDouble(),
@@ -129,38 +146,118 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
     };
 
     final topKey = _findTopKey(dist);
-    final feedback = decoded['latest_feedback'] ?? '';
+    final feedback = (decoded['latest_feedback'] ?? decoded['feedback'] ?? '')
+        .toString()
+        .trim();
     final summary = _shortenTo3Lines(_stripActions(feedback));
-    final actions = _extractActions(feedback).isNotEmpty
-        ? _extractActions(feedback)
-        : _fallbackActions(topKey);
 
-    final music = await _fetchMusic(topKey);
+    // ✅ actions 복원
+    List<String> actions = [];
+    final rawActions = decoded['actions'];
+    try {
+      if (rawActions is List) {
+        actions = rawActions.map((e) => e.toString()).toList();
+      } else if (rawActions != null) {
+        final parsed = jsonDecode(jsonEncode(rawActions));
+        if (parsed is List) actions = parsed.map((e) => e.toString()).toList();
+      }
+    } catch (err) {
+      debugPrint("⚠️ actions 복원 오류: $err");
+    }
+
+    if (actions.isEmpty) {
+      actions = _extractActions(feedback);
+      if (actions.isEmpty) actions = _fallbackActions(topKey);
+    }
+
+    // 🎵 Node DB 음악 복원
+    final musicRaw = decoded['music'];
+    List<_Song> songs = _parseMusicList(musicRaw);
+
+    // 🎵 Flask 음악 추천 (보조용)
+    if (songs.isEmpty) {
+      try {
+        final flaskRes = await http.post(
+          Uri.parse('$kFlaskUrl/recommend/music'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'distribution': distRaw}),
+        );
+        if (flaskRes.statusCode == 200) {
+          final decoded = jsonDecode(flaskRes.body);
+          if (decoded['ok'] == true && decoded['music'] != null) {
+            songs = _parseMusicList(decoded['music']);
+            debugPrint("🎵 Flask 추천 ${songs.length}곡 수신 완료");
+          }
+        }
+      } catch (err) {
+        debugPrint("⚠️ Flask 음악 추천 실패: $err");
+      }
+    }
+
+    //setState(() {
+    //_songs = songs;
+    // });
+    debugPrint("📦 최종 songs count(setState 후): ${songs.length}");
 
     return _TodayData(
       dist: dist,
       topKey: topKey,
       summary: summary,
       fullFeedback: feedback,
-      songs: music,
+      songs: songs,
       actions: actions,
     );
   }
 
-  // ✅ 음악 추천
-  Future<List<_Song>> _fetchMusic(String topKey) async {
-    final uri = Uri.parse(
-      '$kBaseUrl/recommend/music?user_id=$kUserId&emotion=$topKey',
-    );
-    final r = await http.get(uri);
-    if (r.statusCode != 200) return [];
-    final decoded = jsonDecode(r.body);
-    final list = decoded is List
-        ? decoded
-        : (decoded['items'] is List ? decoded['items'] : []);
-    return list
-        .map<_Song>((e) => _Song.fromMap(Map<String, dynamic>.from(e)))
-        .toList();
+  // ✅ music 파싱
+  List<_Song> _parseMusicList(dynamic musicRaw) {
+    try {
+      if (musicRaw == null) return [];
+
+      // ✅ 1. 문자열(JSON-like) 형태인 경우
+      if (musicRaw is String && musicRaw.trim().isNotEmpty) {
+        var txt = musicRaw.trim();
+
+        // ``` 제거
+        txt = txt
+            .replaceAll(RegExp(r'```[a-zA-Z]*'), '')
+            .replaceAll('```', '')
+            .trim();
+
+        // ✅ JSON 배열이 아니면 강제로 배열로 감싸기
+        if (!txt.startsWith('[')) txt = '[$txt]';
+
+        // ✅ 작은따옴표(') → 큰따옴표(") 치환
+        txt = txt.replaceAll("'", '"');
+
+        debugPrint('🧩 musicRaw (fixed JSON): $txt');
+        final parsed = jsonDecode(txt);
+
+        if (parsed is List) {
+          return parsed
+              .map<_Song>((e) {
+                final map = Map<String, dynamic>.from(e);
+                return _Song.fromMap(map);
+              })
+              .where((s) => s.title.isNotEmpty && s.artist.isNotEmpty)
+              .toList();
+        }
+      }
+
+      // ✅ 2. 이미 List<Map> 형태인 경우
+      if (musicRaw is List) {
+        return musicRaw
+            .map<_Song>((e) {
+              final map = Map<String, dynamic>.from(jsonDecode(jsonEncode(e)));
+              return _Song.fromMap(map);
+            })
+            .where((s) => s.title.isNotEmpty && s.artist.isNotEmpty)
+            .toList();
+      }
+    } catch (err) {
+      debugPrint('💥 music 파싱 오류: $err');
+    }
+    return [];
   }
 
   // ===== 유틸 =====
@@ -214,19 +311,22 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
   List<String> _fallbackActions(String key) {
     switch (key) {
       case '기쁨':
-        return ['좋았던 순간을 메모로 남기기', '가벼운 산책하며 기분 유지하기'];
+        return ['좋았던 순간 기록하기', '가벼운 산책하기', '친구에게 감사 인사하기'];
       case '슬픔':
-        return ['따뜻한 차 마시며 휴식하기', '친한 사람에게 안부 메시지 보내기'];
+        return ['따뜻한 차 마시며 휴식하기', '좋은 기억 떠올리기', '일기를 써보기'];
       case '분노':
-        return ['5분 복식호흡으로 긴장 풀기', '가벼운 스트레칭 10분'];
+        return ['복식호흡으로 진정하기', '스트레칭 10분', '산책하며 생각 정리하기'];
       case '놀람':
-        return ['새로운 음악 한 곡 듣기', '오늘 놀란 순간 기록하기'];
+        return ['오늘의 놀람 기록하기', '새로운 음악 듣기', '편하게 휴식하기'];
       default:
-        return ['짧은 산책하기', '좋아하는 음악 듣기'];
+        return ['심호흡하기', '좋아하는 음악 듣기', '짧은 산책하기'];
     }
   }
 
-  String _pct(num v) => '${v.toStringAsFixed(0)}%';
+  String _pct(num v) {
+    if (v > 1) return '${v.toStringAsFixed(0)}%';
+    return '${(v * 100).toStringAsFixed(0)}%';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +343,8 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
         }
 
         final d = snap.data!;
+        debugPrint("📦 최종 songs count: ${d.songs.length}");
+
         return Scaffold(
           appBar: AppBar(
             title: const Text('오늘의 감정'),
@@ -286,26 +388,21 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
                       ),
                       const SizedBox(height: 8),
                       Wrap(
-                        children: _keys
-                            .map(
-                              (k) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                margin: const EdgeInsets.only(
-                                  right: 8,
-                                  bottom: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _chipBg[k],
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: _chipBorder[k]!),
-                                ),
-                                child: Text('$k ${_pct(d.dist[k] ?? 0)}'),
-                              ),
-                            )
-                            .toList(),
+                        children: _keys.map((k) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            margin: const EdgeInsets.only(right: 8, bottom: 6),
+                            decoration: BoxDecoration(
+                              color: _chipBg[k],
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: _chipBorder[k]!),
+                            ),
+                            child: Text('$k ${_pct(d.dist[k] ?? 0)}'),
+                          );
+                        }).toList(),
                       ),
                     ],
                   ),
@@ -332,26 +429,6 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
                 ),
                 const SizedBox(height: 8),
                 ..._buildActionList(d.actions),
-                const SizedBox(height: 22),
-                SizedBox(
-                  height: 46,
-                  child: ElevatedButton(
-                    onPressed: () =>
-                        Navigator.of(context).popUntil((r) => r.isFirst),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kMainGreen,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      '확인',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
@@ -361,19 +438,25 @@ class _TodayEmotionScreenState extends State<TodayEmotionScreen> {
   }
 
   List<Widget> _buildActionList(List<String> actions) {
-    if (actions.isEmpty)
+    if (actions.isEmpty) {
       return [const _ActionChip(text: '오늘 실행할 작은 행동을 정해보세요.')];
+    }
+    final fixed = List<String>.from(actions);
+    while (fixed.length < 3) {
+      fixed.add('감정에 맞는 활동을 추가해보세요.');
+    }
     return [
-      for (int i = 0; i < actions.length; i++)
-        _ActionChip(text: actions[i], highlight: i == 0),
+      _ActionChip(text: fixed[0], highlight: true),
+      _ActionChip(text: fixed[1]),
+      _ActionChip(text: fixed[2]),
     ];
   }
 }
 
-// ===== 음악 섹션 =====
 class _MusicSection extends StatelessWidget {
   final List<_Song> songs;
   const _MusicSection({required this.songs});
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -413,6 +496,7 @@ class _Song {
   final String? link;
   final String? reason;
   _Song({required this.title, required this.artist, this.link, this.reason});
+
   factory _Song.fromMap(Map<String, dynamic> m) => _Song(
     title: (m['title'] ?? '').toString(),
     artist: (m['artist'] ?? '').toString(),
@@ -421,9 +505,11 @@ class _Song {
   );
 }
 
+// ===== 곡 타일 =====
 class _SongTile extends StatelessWidget {
   final _Song song;
   const _SongTile({required this.song});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -489,10 +575,12 @@ class _SongTile extends StatelessWidget {
   }
 }
 
+// ===== 행동칩 (추천 행동) =====
 class _ActionChip extends StatelessWidget {
   final String text;
   final bool highlight;
   const _ActionChip({required this.text, this.highlight = false});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -527,15 +615,25 @@ class _ActionChip extends StatelessWidget {
               ),
             )
           else
-            const Icon(Icons.check_circle_outline, color: Colors.black54),
+            const Icon(
+              Icons.check_circle_outline,
+              color: Colors.black54,
+              size: 20,
+            ),
           const SizedBox(width: 8),
-          Expanded(child: Text(text)),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.black87, fontSize: 15),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+// ===== 데이터 모델 =====
 class _TodayData {
   final Map<String, double> dist;
   final String topKey;
@@ -543,6 +641,7 @@ class _TodayData {
   final String fullFeedback;
   final List<_Song> songs;
   final List<String> actions;
+
   _TodayData({
     required this.dist,
     required this.topKey,
