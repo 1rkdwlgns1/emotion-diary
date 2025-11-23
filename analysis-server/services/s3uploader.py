@@ -41,15 +41,15 @@ def upload_async(local_path: str, filename: str) -> str:
 
     def _run():
         try:
-            print(f"⬆️ S3 업로드 중... ({local_path} → s3://{_S3_BUCKET}/{s3_key})")
+            print(f"S3 업로드 중... ({local_path} → s3://{_S3_BUCKET}/{s3_key})")
             _s3.upload_file(
                 local_path, _S3_BUCKET, s3_key,
                 ExtraArgs={"ContentType": _guess_ct(filename)},
                 Config=cfg,
             )
-            print(f"✅ S3 업로드 완료: {s3_key}")
+            print(f"S3 업로드 완료: {s3_key}")
         except Exception as e:
-            print(f"❌ S3 업로드 실패: {e}")
+            print(f"S3 업로드 실패: {e}")
 
     _pool.submit(_run)
     return s3_key
@@ -60,15 +60,15 @@ def download_from_s3(bucket, key, dest_dir="./uploads"):
         filename = os.path.basename(key)
         local_path = os.path.join(dest_dir, f"tmp_{filename}")
 
-        print(f"⬇️ S3에서 다운로드 중... ({bucket}/{key} → {local_path})")
+        print(f"S3에서 다운로드 중... ({bucket}/{key} → {local_path})")
         _s3.download_file(bucket, key, local_path)
-        print(f"✅ S3 다운로드 완료: {local_path}")
+        print(f"S3 다운로드 완료: {local_path}")
         return local_path
     except ClientError as e:
-        print(f"❌ S3 다운로드 오류: {e}")
+        print(f"S3 다운로드 오류: {e}")
         return None
 
-# ✅ 추가: app.py에서 부를 download()
+# app.py에서 부를 download()
 def download(key):
     bucket = os.getenv("AWS_S3_BUCKET", _S3_BUCKET)
     return download_from_s3(bucket, key)

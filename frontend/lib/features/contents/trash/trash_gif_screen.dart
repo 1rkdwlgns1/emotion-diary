@@ -1,3 +1,4 @@
+//감정 쓰레기통 .Gif 화면
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -35,21 +36,23 @@ class _TrashGifScreenState extends State<TrashGifScreen> {
 
     SchedulerBinding.instance.addPostFrameCallback((_) async {
       try {
-        // ✅ GIF 캐시 초기화 → 항상 첫 프레임부터 재생
+        // GIF 캐시 초기화 → 항상 첫 프레임부터 재생
         await AssetImage(widget.gifAsset).evict();
 
-        // ✅ 효과음 파일 로드 확인
+        // 효과음 파일 로드 확인
         await rootBundle.load('assets/sounds/paper.mp3');
 
-        // ✅ 오디오 세팅 (최신 버전용)
+        // 오디오 세팅
+
         await _player.setVolume(1.0);
+        await _player.setPlaybackRate(1.1);
         await _player.setReleaseMode(ReleaseMode.stop);
         await _player.play(AssetSource('sounds/paper.mp3'));
       } catch (e) {
-        debugPrint("🔇 오디오 재생 실패: $e");
+        debugPrint("오디오 재생 실패: $e");
       }
 
-      // ✅ 닫기 타이머 시작
+      // 닫기 타이머 시작
       _timer = Timer(widget.duration + widget.exitDelay, () {
         if (mounted) Navigator.of(context).pop(true);
       });
@@ -76,14 +79,14 @@ class _TrashGifScreenState extends State<TrashGifScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1️⃣ 배경 이미지
+          // 배경 이미지
           Image.asset(
             widget.backgroundAsset,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
           ),
 
-          // 2️⃣ 중앙 GIF
+          // 중앙 GIF
           Center(
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -100,7 +103,7 @@ class _TrashGifScreenState extends State<TrashGifScreen> {
             ),
           ),
 
-          // 3️⃣ 하단 문구
+          // 하단 문구
           Positioned(
             left: 0,
             right: 0,

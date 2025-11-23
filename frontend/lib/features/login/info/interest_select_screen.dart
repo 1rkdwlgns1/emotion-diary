@@ -1,6 +1,5 @@
-// lib/features/login/info/interest_select_screen.dart
 import 'package:flutter/material.dart';
-import '../../../../core/user_api.dart'; // ✅ 수정된 경로
+import '../../../../core/user_api.dart';
 
 import '../../main_tab/main_tab_screen.dart';
 
@@ -64,7 +63,7 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
               ),
               const SizedBox(height: 24),
 
-              // ✅ 취미 선택 Wrap
+              // 취미 선택
               Wrap(
                 spacing: 10,
                 runSpacing: 12,
@@ -120,7 +119,7 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
               ),
               const Spacer(),
 
-              // ✅ 다음(시작하기) 버튼
+              // 다음(시작하기) 버튼
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -141,7 +140,7 @@ class _InterestSelectScreenState extends State<InterestSelectScreen> {
                           const SnackBar(content: Text('취미 저장 완료!')),
                         );
 
-                        // ✅ 메인 화면으로 이동
+                        // 메인 화면으로 이동
                         if (!mounted) return;
                         Navigator.pushAndRemoveUntil(
                           context,

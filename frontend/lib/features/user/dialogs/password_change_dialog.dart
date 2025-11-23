@@ -1,7 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/constants.dart';
 
 Future<void> showPasswordChangeDialog(
   BuildContext context, {
+  required String email,
   required VoidCallback onSuccess,
 }) async {
   final oldController = TextEditingController();
@@ -14,6 +19,7 @@ Future<void> showPasswordChangeDialog(
 
   String? newPwError;
   String? confirmError;
+  bool isLoading = false;
 
   bool validatePw(String pw) {
     final valid = RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d\S]{8,16}$');
@@ -26,6 +32,67 @@ Future<void> showPasswordChangeDialog(
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, setState) {
+          Future<void> _submitChange() async {
+            final oldPw = oldController.text.trim();
+            final newPw = newController.text.trim();
+            final confirm = confirmController.text.trim();
+
+            // 기본 유효성 검사
+            setState(() {
+              newPwError = !validatePw(newPw)
+                  ? '영문,숫자 포함 8~16자로 입력해 주세요.'
+                  : null;
+              confirmError = (confirm != newPw) ? '비밀번호가 일치하지 않아요!' : null;
+            });
+            if (oldPw.isEmpty || newPwError != null || confirmError != null) {
+              return;
+            }
+
+            setState(() => isLoading = true);
+
+            try {
+              // 토큰 불러오기
+              final prefs = await SharedPreferences.getInstance();
+              final token = prefs.getString('jwt_token');
+
+              if (token == null) {
+                throw Exception("로그인 정보가 없습니다. 다시 로그인해주세요.");
+              }
+
+              // 서버에 변경 요청 보내기
+              final res = await http.post(
+                Uri.parse('$kBaseUrl/users/change-password'),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer $token',
+                },
+                body: jsonEncode({'oldPassword': oldPw, 'newPassword': newPw}),
+              );
+
+              final data = jsonDecode(res.body);
+              if (res.statusCode == 200 && data['ok'] == true) {
+                Navigator.pop(dialogContext);
+                onSuccess();
+              } else {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(
+                    content: Text(data['message'] ?? '비밀번호 변경 실패'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+            } catch (e) {
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                SnackBar(
+                  content: Text('서버 오류: $e'),
+                  backgroundColor: Colors.redAccent,
+                ),
+              );
+            } finally {
+              setState(() => isLoading = false);
+            }
+          }
+
           return Dialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -37,10 +104,9 @@ Future<void> showPasswordChangeDialog(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 타이틀 + X
                   Stack(
                     children: [
-                      Center(
+                      const Center(
                         child: Text(
                           '비밀번호 변경',
                           style: TextStyle(
@@ -68,12 +134,7 @@ Future<void> showPasswordChangeDialog(
                   TextField(
                     controller: oldController,
                     obscureText: oldObscure,
-                    style: const TextStyle(fontSize: 15),
                     decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 13,
-                      ),
                       hintText: '기존 비밀번호를 입력해 주세요.',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -85,23 +146,18 @@ Future<void> showPasswordChangeDialog(
                           oldObscure
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
-                          color: Colors.grey[500],
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 40), // << 여기만 40으로!
+                  const SizedBox(height: 16),
+
                   // 새 비밀번호
                   TextField(
                     controller: newController,
                     obscureText: newObscure,
-                    style: const TextStyle(fontSize: 15),
                     decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 13,
-                      ),
-                      hintText: '재설정할 비밀번호를 입력해 주세요.',
+                      hintText: '새 비밀번호 입력',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -112,22 +168,14 @@ Future<void> showPasswordChangeDialog(
                           newObscure
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
-                          color: Colors.grey[500],
                         ),
                       ),
                     ),
-                    onChanged: (v) {
-                      setState(() {
-                        newPwError = !validatePw(v)
-                            ? '영문,숫자 포함 8~16자로 입력해 주세요.'
-                            : null;
-                        confirmError =
-                            (confirmController.text.isNotEmpty &&
-                                confirmController.text != v)
-                            ? '비밀번호가 일치하지 않아요!'
-                            : null;
-                      });
-                    },
+                    onChanged: (v) => setState(() {
+                      newPwError = !validatePw(v)
+                          ? '영문,숫자 포함 8~16자로 입력해 주세요.'
+                          : null;
+                    }),
                   ),
                   if (newPwError != null)
                     Padding(
@@ -150,12 +198,7 @@ Future<void> showPasswordChangeDialog(
                   TextField(
                     controller: confirmController,
                     obscureText: confirmObscure,
-                    style: const TextStyle(fontSize: 15),
                     decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 13,
-                      ),
                       hintText: '비밀번호 확인',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -167,7 +210,6 @@ Future<void> showPasswordChangeDialog(
                           confirmObscure
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
-                          color: Colors.grey[500],
                         ),
                       ),
                     ),
@@ -201,43 +243,30 @@ Future<void> showPasswordChangeDialog(
                     width: double.infinity,
                     height: 41,
                     child: ElevatedButton(
-                      onPressed: () {
-                        final oldPw = oldController.text.trim();
-                        final newPw = newController.text.trim();
-                        final confirm = confirmController.text.trim();
-                        setState(() {
-                          newPwError = !validatePw(newPw)
-                              ? '영문,숫자 포함 8~16자로 입력해 주세요.'
-                              : null;
-                          confirmError = (confirm != newPw)
-                              ? '비밀번호가 일치하지 않아요!'
-                              : null;
-                        });
-                        if (oldPw.isEmpty ||
-                            newPwError != null ||
-                            confirmError != null ||
-                            newPw.isEmpty ||
-                            confirm.isEmpty) {
-                          return;
-                        }
-                        onSuccess();
-                        Navigator.pop(dialogContext);
-                      },
+                      onPressed: isLoading ? null : _submitChange,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFA7BD99),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        elevation: 0,
                       ),
-                      child: const Text(
-                        '완료',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
+                      child: isLoading
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.3,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              '완료',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
                     ),
                   ),
                 ],

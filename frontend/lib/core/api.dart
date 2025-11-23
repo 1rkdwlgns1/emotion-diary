@@ -1,16 +1,14 @@
-// lib/core/api.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
-/// --- 서버 URL (환경에 맞게 수정)
-/// 에뮬레이터: http://10.0.2.2:5001
-/// 실기기: http://<PC_IP>:5001
-/*const String kBaseUrl = 'http://10.0.2.2:5001';*/
-const String kBaseUrl = 'http://10.0.2.2:3000';
+// 서버 URL
+// 에뮬레이터: http://10.0.2.2:5001
+// 실기기: http://<PC_IP>:5001
+const String kBaseUrl = 'http://13.209.65.181:3000';
 const String kUserId = 'anon';
 
-/// 분석 결과 모델
+// 분석 결과 모델
 class AnalysisItem {
   final int id;
   final String type;
@@ -43,9 +41,9 @@ class AnalysisItem {
   );
 }
 
-/// 서버 통신 API
+// 서버 통신 API
 class AnalysisApi {
-  /// 파일 업로드 + 분석
+  // 파일 업로드 + 분석
   static Future<Map<String, dynamic>> uploadFile(File file) async {
     final uri = Uri.parse('$kBaseUrl/analysis/file');
     final req = http.MultipartRequest('POST', uri)
@@ -60,7 +58,7 @@ class AnalysisApi {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
-  /// 하루 조회 ✅ 수정됨 — (List → Map)
+  /// 하루 조회
   static Future<Map<String, dynamic>> fetchDay(String date) async {
     final url = Uri.parse('$kBaseUrl/results/day?date=$date&user_id=$kUserId');
     final r = await http.get(url);
@@ -68,7 +66,7 @@ class AnalysisApi {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
-  /// 기간 조회 (주간)
+  // 기간 조회 (주간)
   static Future<List<AnalysisItem>> fetchRange(String start, String end) async {
     final url = Uri.parse(
       '$kBaseUrl/results/range?start=$start&end=$end&user_id=$kUserId',

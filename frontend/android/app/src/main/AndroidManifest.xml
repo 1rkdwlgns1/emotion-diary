@@ -11,10 +11,36 @@
 
     <application
         android:name="${applicationName}"
-        android:label="capstone"
+        android:label="마음-Zip"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
 
+        <!-- ⭐ 카카오 네이티브 앱 키 (중요) -->
+        <meta-data
+            android:name="com.kakao.sdk.AppKey"
+            android:value="4774796f75df5e13d71518ffc178ec9a" />
+
+        <!-- ========================================= -->
+        <!-- 🔥 카카오 로그인 리다이렉트 Activity (필수) -->
+        <!-- ========================================= -->
+        <activity
+            android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"
+            android:exported="true">
+            <intent-filter android:label="flutter_web_auth">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- 로그인 리다이렉트 URI -->
+                <data
+                    android:scheme="kakao4774796f75df5e13d71518ffc178ec9a"
+                    android:host="oauth" />
+            </intent-filter>
+        </activity>
+
+        <!-- ========================================= -->
+        <!-- ⭐ 메인 액티비티 -->
+        <!-- ========================================= -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -25,18 +51,37 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
 
+            <!-- 기본 Flutter 설정 -->
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
+            <!-- Flutter 앱 시작 -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- ========================================= -->
+            <!-- 🔥 카카오톡 공유 / 메시지용 (필수) -->
+            <!-- ========================================= -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <!-- 카카오링크 URI -->
+                <data
+                    android:scheme="kakao4774796f75df5e13d71518ffc178ec9a"
+                    android:host="kakaolink" />
+            </intent-filter>
+
         </activity>
 
+        <!-- Flutter 구성요소 -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
+
 </manifest>

@@ -9,7 +9,7 @@ def _load(model_name: str | None = None):
     global _model
     if _model is None:
         name = model_name or os.getenv("WHISPER_MODEL", "small")
-        _model = whisper.load_model(name, device="cpu")  # ✅ CPU 강제
+        _model = whisper.load_model(name, device="cpu")  
     return _model
 
 def transcribe(audio_path: str) -> dict:

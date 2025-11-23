@@ -1,16 +1,20 @@
-// lib/core/constants.dart
 import 'package:flutter/material.dart';
 
-// ==== 서버 환경 ====
-const String kBaseUrl = 'http://10.0.2.2:3000'; // Node.js 서버 주소
-const String kUserId = 'anon'; // 임시 사용자 ID
+// 서버 환경
+// Node 서버
+const String kBaseUrl = 'http://13.209.65.181:3000';
+// Flask 서버
+const String kFlaskUrl = 'http://13.209.65.181:5001';
 
-// ==== 색상 ====
+// 임시 사용자 ID
+const String kUserId = 'anon';
+
+// 색상
 const Color kMainGreen = Color(0xFF859A7E);
 const Color kMainGray = Color(0xFFBDBDBD);
 const Color kMainYellow = Color(0xFFF7C873);
 
-// ==== 감정 이름 매핑 ====
+// 감정 이름 매핑
 const Map<String, String> kEmotionKo = {
   'joy': '기쁨',
   'sad': '슬픔',
@@ -21,7 +25,7 @@ const Map<String, String> kEmotionKo = {
   'disgust': '혐오',
 };
 
-// ==== 감정별 색상 ====
+// 감정별 색상
 const Map<String, Color> kEmotionColors = {
   'joy': Color(0xFFFFE082),
   'sad': Color(0xFF90CAF9),
@@ -32,7 +36,7 @@ const Map<String, Color> kEmotionColors = {
   'disgust': Color(0xFFBCAAA4),
 };
 
-// ==== 감정별 이모티콘 ====
+// 감정별 이모티콘
 const Map<String, String> kEmotionIcons = {
   'joy': '😊',
   'sad': '😢',

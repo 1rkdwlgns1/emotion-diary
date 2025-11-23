@@ -1,13 +1,4 @@
-// lib/features/home/loading_screen.dart
-/*
-  loading_screen.dart (최신 안정 버전)
-  - Node 서버로 업로드 후 Flask 자동 분석 연동
-  - user_id 필드 포함
-  - contentType 자동 감지
-  - GPT 피드백 정상 표시
-  - "분석 중..." 애니메이션 유지
-*/
-
+//로딩 화면 스크린
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -16,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../core/constants.dart';
-import 'analysis_result_screen.dart';
+import 'today_emotion_screen.dart';
 
 class LoadingScreen extends StatefulWidget {
   final String imagePath;
@@ -101,8 +92,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
       mediaType = MediaType('image', 'jpeg');
     } else if (lower.endsWith('.png')) {
       mediaType = MediaType('image', 'png');
-    } else if (lower.endsWith('.bmp')) {
-      mediaType = MediaType('image', 'bmp');
     } else {
       mediaType = MediaType('application', 'octet-stream');
     }
@@ -116,19 +105,9 @@ class _LoadingScreenState extends State<LoadingScreen> {
           contentType: mediaType,
         ),
       );
-    } else {
-      final bytes = await File(path).readAsBytes();
-      req.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: 'upload',
-          contentType: mediaType,
-        ),
-      );
     }
 
-    print('📤 업로드 요청: user_id=$kUserId, file=$path');
+    print('업로드 요청: user_id=$kUserId, file=$path');
     return req.send();
   }
 
@@ -138,14 +117,16 @@ class _LoadingScreenState extends State<LoadingScreen> {
       if (!await f.exists()) {
         throw Exception('파일을 찾을 수 없습니다: ${widget.imagePath}');
       }
+      print('현재 업로드 주소: $kBaseUrl');
 
+      // 파일 업로드
       final streamed = await _sendFile(widget.imagePath);
       final resp = await http.Response.fromStream(streamed);
       if (resp.statusCode != 200) {
         throw Exception('HTTP ${resp.statusCode}: ${resp.body}');
       }
 
-      final Map<String, dynamic> uploadResult = jsonDecode(resp.body);
+      final uploadResult = jsonDecode(resp.body);
       if (uploadResult['ok'] != true) {
         throw Exception('업로드 실패: ${uploadResult['error'] ?? 'unknown'}');
       }
@@ -153,8 +134,8 @@ class _LoadingScreenState extends State<LoadingScreen> {
       final mediaId = uploadResult['media_id'];
       final s3Key = uploadResult['s3Key'];
 
-      // 🔹 Flask 분석 요청 (Node가 Flask 호출)
-      final uriAnalyze = Uri.parse('$kBaseUrl/analysis/file');
+      // Node 서버로 분석 요청 (Flask는 Node가 호출함)
+      final uriAnalyze = Uri.parse('$kBaseUrl/analysis/analyze');
       final analyzeRes = await http.post(
         uriAnalyze,
         headers: {'Content-Type': 'application/json'},
@@ -169,37 +150,36 @@ class _LoadingScreenState extends State<LoadingScreen> {
         throw Exception('분석 실패: ${analyzeRes.body}');
       }
 
-      final Map<String, dynamic> resultData = jsonDecode(analyzeRes.body);
+      final resultData = jsonDecode(analyzeRes.body);
       if (resultData['ok'] != true) {
         throw Exception('분석 실패: ${resultData['error'] ?? 'unknown'}');
       }
 
-      final flaskRes = resultData['flaskResponse'] ?? {};
-      final fused = flaskRes['result']?['fused'] ?? {};
-      final dist = fused['distribution'] ?? {};
-      final finalLabel = fused['final_label'];
+      // Node 결과 파싱
+      final nodeRes = resultData['result'] ?? {};
+      final dist = Map<String, dynamic>.from(nodeRes['emotionData'] ?? {});
+      final gptFeedback = nodeRes['feedback'] ?? '';
+      final mainKo = nodeRes['mainEmotion'] ?? '알 수 없음';
+      final musicList = nodeRes['music'] ?? [];
 
-      // ✅ GPT 피드백 포함
-      final gptFeedback =
-          (flaskRes['result']?['feedback'] ?? flaskRes['feedback'] ?? '')
-              as String? ??
-          '';
+      // 퍼센트 변환
+      final mapped = _toKoPercent(dist);
 
-      final mapped = _toKoPercent(Map<String, dynamic>.from(dist));
-      final mainKo = _labelToKo(finalLabel?.toString());
-
+      // 결과 전달
       final analysisResult = {
         'mainEmotion': mainKo,
         'emotionData': mapped,
         'gptFeedback': gptFeedback,
-        'debug': flaskRes,
+        'actions': nodeRes['actions'] ?? [],
+        'music': musicList,
+        'debug': nodeRes,
       };
 
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => AnalysisResultScreen(result: analysisResult),
+          builder: (_) => TodayEmotionScreen(result: analysisResult),
         ),
       );
     } catch (e) {
@@ -214,7 +194,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
         .map((e) => e.toDouble().abs())
         .fold<double>(0, (a, b) => a > b ? a : b);
     final bool alreadyPct = maxVal > 1.001;
-    final Map<String, double> out = {};
+    final out = <String, double>{};
     dist.forEach((en, v) {
       final ko = _labelEn2Ko[en] ?? en;
       var val = (v is num ? v.toDouble() : 0.0);
@@ -223,8 +203,6 @@ class _LoadingScreenState extends State<LoadingScreen> {
     });
     return out;
   }
-
-  String _labelToKo(String? en) => _labelEn2Ko[en ?? ''] ?? '알 수 없음';
 
   @override
   Widget build(BuildContext context) {

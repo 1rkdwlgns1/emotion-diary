@@ -1,7 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../../../core/constants.dart';
 
 class PasswordResetScreen extends StatefulWidget {
-  const PasswordResetScreen({super.key});
+  final String email;
+  const PasswordResetScreen({super.key, required this.email});
 
   @override
   State<PasswordResetScreen> createState() => _PasswordResetScreenState();
@@ -13,11 +17,10 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
 
   String? errorText;
 
-  void _onReset() {
+  void _onReset() async {
     final pwd = passwordController.text.trim();
     final check = passwordCheckController.text.trim();
 
-    // 8~16자, 영문+숫자 체크
     if (pwd.length < 8 ||
         pwd.length > 16 ||
         !RegExp(r'[0-9]').hasMatch(pwd) ||
@@ -31,10 +34,41 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
     }
     setState(() => errorText = null);
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('비밀번호가 재설정되었습니다.')));
-    // Navigator.pop(context); // 원한다면 로그인 등으로 이동
+    try {
+      final res = await http.post(
+        Uri.parse('$kBaseUrl/users/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': widget.email, 'newPassword': pwd}),
+      );
+
+      final data = jsonDecode(res.body);
+      if (res.statusCode == 200 && data['ok'] == true) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('비밀번호가 재설정되었습니다.')));
+        Navigator.pop(context);
+      } else {
+        _showDialog(data['message'] ?? '비밀번호 변경 실패');
+      }
+    } catch (e) {
+      _showDialog('서버 연결 실패: $e');
+    }
+  }
+
+  void _showDialog(String msg) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('알림'),
+        content: Text(msg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -67,11 +101,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
               decoration: const InputDecoration(
                 labelText: '비밀번호 확인',
                 border: OutlineInputBorder(),
-                // errorText: 없음!
               ),
               obscureText: true,
             ),
-            // ↓ 아래에서 오로지 한 곳만 에러 메시지 출력!
             if (errorText != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8, left: 4),

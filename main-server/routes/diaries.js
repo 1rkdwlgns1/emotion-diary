@@ -1,15 +1,14 @@
-// routes/diaries.js
 import express from "express";
 import { verifyToken } from "../middlewares/auth.js";
 import pool from "../db.js";
 
 const router = express.Router();
 
-// ✅ 일기 작성 (로그인 필요)
+// 일기 작성
 router.post("/", verifyToken, async (req, res) => {
   try {
     const { content, emotion_label } = req.body;
-    const { user_id } = req.user; // 토큰에서 user_id 추출
+    const { user_id } = req.user; 
 
     if (!content) {
       return res.status(400).json({ ok: false, message: "일기 내용을 입력하세요." });
@@ -29,7 +28,7 @@ router.post("/", verifyToken, async (req, res) => {
   }
 });
 
-// ✅ 내 일기 목록 조회 (로그인 필요)
+// 내 일기 목록 조회
 router.get("/", verifyToken, async (req, res) => {
   try {
     const { user_id } = req.user;

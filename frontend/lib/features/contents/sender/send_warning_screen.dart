@@ -1,5 +1,7 @@
+/*
+
 import 'package:flutter/material.dart';
-import '../sender/send_complete_screen.dart'; // ✅ 상대경로로 import (같은 sender 폴더 안)
+import '../sender/send_complete_screen.dart'; // 상대경로로 import (같은 sender 폴더 안)
 
 class SendWarningScreen extends StatelessWidget {
   const SendWarningScreen({super.key});
@@ -14,7 +16,7 @@ class SendWarningScreen extends StatelessWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            // ⚠️ 경고 팝업
+            // 경고 팝업
             Center(
               child: Container(
                 width: 270,
@@ -47,7 +49,7 @@ class SendWarningScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        // ✅ 보내기 버튼 → 전달 완료 화면으로 이동
+                        // 보내기 버튼 → 전달 완료 화면으로 이동
                         ElevatedButton(
                           onPressed: () {
                             Navigator.pushReplacement(
@@ -67,7 +69,7 @@ class SendWarningScreen extends StatelessWidget {
                           child: const Text('보내기'),
                         ),
 
-                        // ❌ 취소하기 버튼 → 경고창 닫기
+                        // 취소하기 버튼 → 경고창 닫기
                         ElevatedButton(
                           onPressed: () {
                             Navigator.pop(context);
@@ -95,3 +97,4 @@ class SendWarningScreen extends StatelessWidget {
     );
   }
 }
+*/

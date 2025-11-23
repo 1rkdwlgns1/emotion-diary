@@ -1,4 +1,4 @@
-// lib/features/home/home_screen.dart
+//홈 화면 스크린
 import 'package:flutter/material.dart';
 import '../camera/camera_screen.dart';
 import 'loading_screen.dart';
@@ -27,7 +27,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// ✅ 메시지 도착 시 홈 화면 위에 다이얼로그로 띄우는 함수
   void showIncomingMessage(String title, String content) {
     showDialog(
       context: context,
@@ -58,20 +57,40 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text(
-                '대충그림..',
+                '마음.zip',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 26,
                   color: Colors.black87,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 12),
-              Icon(
-                Icons.camera_alt_outlined,
-                size: 120,
-                color: Colors.grey[400],
+              const SizedBox(height: 24),
+
+              // AI 캐릭터 이미지
+              Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: Image.asset(
+                  'assets/ai_character.png',
+                  fit: BoxFit.cover,
+                ),
               ),
+
               const SizedBox(height: 30),
+
+              // 일기 촬영 버튼
               SizedBox(
                 width: 260,
                 height: 48,
@@ -90,6 +109,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   child: const Text('일기 촬영'),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 안내 문구 추가
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 40.0),
+                child: Text(
+                  '※ 최근 촬영한 영상의 감정이 반영됩니다.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.black54,
+                    height: 1.4,
+                  ),
                 ),
               ),
             ],

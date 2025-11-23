@@ -1,4 +1,4 @@
-// lib/features/calendar/calendar_screen.dart
+//캘린더 화면
 import 'dart:convert';
 import 'dart:io' show HttpDate;
 import 'package:flutter/material.dart';
@@ -7,7 +7,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'day_emotion_screen.dart' show DayEmotionScreen;
 import 'week_emotion_report_pro.dart' show WeekEmotionReportProScreen;
 
-const String kBaseUrl = 'http://10.0.2.2:3000'; // ✅ Node 서버 주소
+const String kBaseUrl = 'http://13.209.65.181:3000';
 const String kUserId = 'anon';
 const Color kMainGreen = Color(0xFF859A7E);
 
@@ -35,20 +35,18 @@ class _Item {
   static DateTime _safeParse(dynamic v) {
     final s = v?.toString() ?? '';
     final iso = DateTime.tryParse(s);
-    if (iso != null) return iso.toLocal();
+    if (iso != null) return iso;
     try {
-      return HttpDate.parse(s).toLocal();
+      return HttpDate.parse(s);
     } catch (_) {}
     return DateTime.now();
   }
 
-  // ✅ Node DB 구조 맞게 emotion → emotion_detail 순서 조정
   factory _Item.fromJson(Map<String, dynamic> j) {
     dynamic raw = j['emotion'] ?? j['emotion_detail'];
     if (raw == null || (raw is String && raw.trim().isEmpty)) {
       raw = j['emotion_detail'] ?? j['emotion'];
     }
-
     if (raw is String) {
       try {
         raw = jsonDecode(raw);
@@ -56,7 +54,6 @@ class _Item {
         raw = {};
       }
     }
-
     if (raw is Map && raw.containsKey('joy')) {
       return _Item(Map<String, dynamic>.from(raw), _safeParse(j['created_at']));
     } else {
@@ -113,30 +110,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     try {
       final r = await http.get(uri);
-
-      if (r.statusCode == 404 ||
-          r.body.trim().isEmpty ||
-          r.body.trim() == '[]') {
+      if (r.statusCode != 200 || r.body.trim().isEmpty) {
         setState(() {
           _moodByDay = {};
           _loading = false;
         });
         return;
-      }
-
-      if (r.statusCode != 200) {
-        throw Exception('HTTP ${r.statusCode}: ${r.body}');
       }
 
       final List raw = jsonDecode(r.body);
-      if (raw.isEmpty) {
-        setState(() {
-          _moodByDay = {};
-          _loading = false;
-        });
-        return;
-      }
-
       final items = raw.map((j) => _Item.fromJson(j)).toList();
 
       final Map<String, Map<String, double>> acc = {};
@@ -192,15 +174,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _moodByDay = map;
       });
     } catch (e) {
-      if (!e.toString().contains('404')) {
-        setState(() {
-          _error = e.toString();
-        });
-      }
+      setState(() => _error = e.toString());
     } finally {
-      setState(() {
-        _loading = false;
-      });
+      setState(() => _loading = false);
     }
   }
 
@@ -228,30 +204,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _selected = null;
       }
     });
-  }
-
-  void _selectSingle(DateTime sel, DateTime foc) {
-    setState(() {
-      _rangeMode = RangeSelectionMode.toggledOff;
-      _rangeStart = null;
-      _rangeEnd = null;
-      _selected = DateTime(sel.year, sel.month, sel.day);
-      _focused = foc;
-    });
-  }
-
-  DateTime _weekStartOf(DateTime d) =>
-      d.subtract(Duration(days: d.weekday % 7));
-  DateTime _weekEndOf(DateTime d) =>
-      _weekStartOf(d).add(const Duration(days: 6));
-
-  (DateTime start, DateTime end) _currentRangeForWeekly() {
-    if (_rangeStart != null && _rangeEnd != null) {
-      return (_rangeStart!, _rangeEnd!);
-    } else {
-      final base = _selected ?? DateTime.now();
-      return (_weekStartOf(base), _weekEndOf(base));
-    }
   }
 
   String _fmtKo(DateTime d) =>
@@ -297,6 +249,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       formatButtonVisible: false,
                     ),
                     calendarStyle: const CalendarStyle(
+                      outsideDaysVisible: true,
+                      outsideTextStyle: TextStyle(color: Colors.transparent),
                       todayDecoration: BoxDecoration(
                         color: Color(0xFFEFF6EE),
                         shape: BoxShape.circle,
@@ -307,7 +261,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       ),
                       rangeHighlightColor: Color(0x2269A36A),
                       withinRangeTextStyle: TextStyle(color: Colors.black87),
-                      outsideDaysVisible: false,
                     ),
                     selectedDayPredicate: (d) =>
                         _selected != null &&
@@ -349,20 +302,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           ),
                         );
                       },
-                      defaultBuilder: (context, day, focusedDay) =>
+                      defaultBuilder: (context, day, _) =>
                           _dayCell(context, day),
-                      outsideBuilder: (context, day, focusedDay) =>
-                          _dayCell(context, day, isOutside: true),
                       todayBuilder: (context, day, _) =>
                           _dayCell(context, day, isToday: true),
                       selectedBuilder: (context, day, _) =>
                           _dayCell(context, day, isSelected: true),
-                      rangeStartBuilder: (context, day, _) =>
-                          _dayCell(context, day, isRangeEdge: true),
-                      rangeEndBuilder: (context, day, _) =>
-                          _dayCell(context, day, isRangeEdge: true),
-                      withinRangeBuilder: (context, day, _) =>
-                          _dayCell(context, day, isWithinRange: true),
                     ),
                   ),
                 ),
@@ -371,15 +316,70 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     padding: EdgeInsets.only(top: 6),
                     child: LinearProgressIndicator(minHeight: 2),
                   ),
+
+                // 감정 색상 범례 + 안내문 추가
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, // 왼쪽 정렬 유지
+                    children: [
+                      // 감정 색상 범례
+                      Wrap(
+                        alignment: WrapAlignment.start, // 가운데(X) → 왼쪽 정렬
+                        spacing: 14,
+                        runSpacing: 6,
+                        children: _keys.map((k) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: _colors[k],
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _ko[k]!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 안내문 (왼쪽 정렬)
+                      const Text(
+                        "※ 하루에 여러 영상을 촬영한 경우, 가장 최근 분석된 감정이 반영되고 저장됩니다.",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.start, // 왼쪽 정렬
+                      ),
+                    ],
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      (_rangeStart != null && _rangeEnd != null)
+                      _rangeStart != null && _rangeEnd != null
                           ? "선택 범위: ${_fmtKo(_rangeStart!)} ~ ${_fmtKo(_rangeEnd!)}"
-                          : (_rangeStart != null && _rangeEnd == null)
-                          ? "범위 시작: ${_fmtKo(_rangeStart!)}  (끝 날짜를 탭하세요)"
+                          : _rangeStart != null && _rangeEnd == null
+                          ? "선택: ${_fmtKo(_rangeStart!)} "
                           : "선택 날짜: ${_fmtKo(_selected ?? DateTime.now())}",
                       style: const TextStyle(
                         fontSize: 13.5,
@@ -389,39 +389,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 4,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Wrap(
-                      spacing: 14,
-                      runSpacing: 6,
-                      children: _keys.map((k) {
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: _colors[k],
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(_ko[k]!, style: const TextStyle(fontSize: 12)),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
+
           SafeArea(
             top: false,
             child: Container(
@@ -430,43 +401,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
               child: Row(
                 children: [
                   Expanded(
-                    child: SizedBox(
-                      height: 46,
-                      child: ElevatedButton(
-                        onPressed: _onTapWeekly,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kMainGreen,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          elevation: 0,
+                    child: ElevatedButton(
+                      onPressed: () => _onTapWeekly(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kMainGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Text(
-                          '주간 리포트 보기',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        '기간 리포트 보기',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: SizedBox(
-                      height: 46,
-                      child: ElevatedButton(
-                        onPressed: _onTapDaily,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kMainGreen,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          elevation: 0,
+                    child: ElevatedButton(
+                      onPressed: () => _onTapDaily(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kMainGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Text(
-                          '감정 보기',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        '감정 보기',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -479,81 +444,65 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  // 터치 안정화 버전 (점 표시 포함)
   Widget _dayCell(
     BuildContext context,
     DateTime day, {
     bool isOutside = false,
     bool isToday = false,
     bool isSelected = false,
-    bool isRangeEdge = false,
-    bool isWithinRange = false,
   }) {
     final key = _dkey(day);
     final mood = _moodByDay[key];
     final dotColor = mood != null ? _colors[mood]! : null;
 
-    final base = Container(
-      margin: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: isWithinRange ? const Color(0x1A69A36A) : null,
-        shape: BoxShape.circle,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            "${day.day}",
-            style: TextStyle(
-              fontWeight: (isSelected || isRangeEdge)
-                  ? FontWeight.w800
-                  : FontWeight.w600,
-              color: isOutside ? Colors.black26 : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          if (dotColor != null)
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: dotColor,
-                shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: () => _onDayTapped(day, day),
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: isToday
+              ? const Color(0xFFEFF6EE)
+              : isSelected
+              ? const Color(0xFFDAE6D7)
+              : null,
+          shape: BoxShape.circle,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "${day.day}",
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                color: isOutside ? Colors.black26 : Colors.black87,
               ),
             ),
-        ],
+            const SizedBox(height: 4),
+            if (dotColor != null)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
       ),
     );
-
-    if (isSelected || isRangeEdge) {
-      return Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFDAE6D7),
-          shape: BoxShape.circle,
-        ),
-        child: base,
-      );
-    }
-    if (isToday) {
-      return Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFEFF6EE),
-          shape: BoxShape.circle,
-        ),
-        child: base,
-      );
-    }
-    return base;
   }
 
   void _onTapWeekly() {
-    final (start, end) = _currentRangeForWeekly();
+    final start = _rangeStart ?? _selected ?? DateTime.now();
+    final end = _rangeEnd ?? _selected ?? DateTime.now();
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => WeekEmotionReportProScreen(
-          startDate: DateTime(start.year, start.month, start.day),
-          endDate: DateTime(end.year, end.month, end.day),
-        ),
+        builder: (_) =>
+            WeekEmotionReportProScreen(startDate: start, endDate: end),
       ),
     );
   }

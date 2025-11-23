@@ -1,4 +1,3 @@
-// lib/features/main_tab/main_tab_screen.dart
 import 'package:flutter/material.dart';
 import '../home/home_screen.dart';
 import '../user/screens/user_screen.dart';
@@ -8,8 +7,8 @@ import '../calendar/calendar_screen.dart';
 const tabIconNames = ['home', 'calendar', 'contents', 'user'];
 
 class MainTabScreen extends StatefulWidget {
-  const MainTabScreen({super.key, this.initialIndex = 0}); // ✅
-  final int initialIndex; // ✅
+  const MainTabScreen({super.key, this.initialIndex = 0});
+  final int initialIndex;
 
   @override
   State<MainTabScreen> createState() => _MainTabScreenState();

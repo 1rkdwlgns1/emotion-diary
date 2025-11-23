@@ -4,9 +4,7 @@ import axios from "axios";
 
 const router = express.Router();
 
-/* =====================================================
-   ✅ 깊은 JSON 파서 (이중 인코딩 대응)
-===================================================== */
+  // JSON 파서 (이중 인코딩 대응)
 function deepParse(raw) {
   try {
     let parsed = raw;
@@ -17,25 +15,23 @@ function deepParse(raw) {
   }
 }
 
-/* =====================================================
-   ✅ /day (오늘 감정 + GPT2 음악 병합 조회)
-===================================================== */
+  // 하루 중 가장 최신 영상 감정만 불러오기 (KST)
 router.get("/day", async (req, res) => {
   try {
     const { user_id, date } = req.query;
     if (!user_id)
       return res.status(400).json({ ok: false, message: "user_id 필요" });
 
-    const now = new Date();
-    const koreaTime = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    // 한국시간 기준
+    const koreaTime = new Date();
     const targetDate =
       !date || date === "undefined" || date.trim() === ""
         ? koreaTime.toISOString().split("T")[0]
         : date;
 
-    console.log("🧩 /results/day called:", { user_id, targetDate });
+    console.log("/results/day 호출:", { user_id, targetDate });
 
-    /* 🎭 감정 분석 결과 조회 */
+    // 하루 중 가장 최근 영상만 가져오기 (이미 KST로 저장됨)
     const [rows] = await pool.query(
       `
       SELECT id, user_id, created_at, emotion, emotion_detail, feedback, actions
@@ -49,7 +45,7 @@ router.get("/day", async (req, res) => {
     );
 
     if (!rows || rows.length === 0) {
-      console.log("❌ 오늘 감정 데이터 없음");
+      console.log("오늘 감정 데이터 없음");
       return res.json({ ok: false, message: "해당 날짜 데이터 없음" });
     }
 
@@ -62,7 +58,7 @@ router.get("/day", async (req, res) => {
       emoRaw?.face?.distribution ||
       {};
 
-    /* ✅ actions 복원 */
+    // 행동 텍스트 처리
     let actions = [];
     if (latest.actions) {
       const raw = latest.actions.trim();
@@ -71,7 +67,7 @@ router.get("/day", async (req, res) => {
       else actions = [raw];
     }
 
-    /* 🎵 GPT2 음악 추천 최신 데이터 조회 */
+    // 음악 추천
     let musicList = [];
     try {
       const [mrows] = await pool.query(
@@ -87,29 +83,14 @@ router.get("/day", async (req, res) => {
 
       if (mrows.length > 0 && mrows[0].music_list) {
         const raw = mrows[0].music_list;
-        // ✅ 확실한 JSON 파싱 로직
-        if (typeof raw === "string") {
-          try {
-            musicList = JSON.parse(raw);
-          } catch {
-            musicList = deepParse(raw);
-          }
-        } else {
-          musicList = deepParse(raw);
-        }
-        if (!Array.isArray(musicList)) {
-          console.log("⚠️ music_list가 배열이 아님, 강제 변환 시도");
-          musicList = [musicList];
-        }
-        console.log(`✅ GPT2 음악 ${musicList.length}곡 로드 완료`);
-      } else {
-        console.log("⚠️ GPT2 음악 데이터 없음");
+        musicList =
+          typeof raw === "string" ? deepParse(raw) : Array.isArray(raw) ? raw : [];
       }
     } catch (err) {
-      console.error("⚠️ gpt2 음악 불러오기 실패:", err.message);
+      console.error("음악 데이터 조회 실패:", err.message);
     }
 
-    /* ✅ 최종 응답 */
+    // 결과 반환
     res.json({
       ok: true,
       avg_distribution: {
@@ -119,69 +100,98 @@ router.get("/day", async (req, res) => {
         neutral: dist.neutral || 0,
         surprise: dist.surprise || 0,
       },
-      latest_feedback: latest.feedback || "",
+      feedback: latest.feedback || "",
       actions,
       music: Array.isArray(musicList) ? musicList : [],
     });
   } catch (err) {
-    console.error("❌ /results/day 오류:", err);
+    console.error("/results/day 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-/* =====================================================
-   ✅ /range (캘린더용)
-===================================================== */
+  // 각 날짜별 가장 최근 감정만 불러오기 (KST)
 router.get("/range", async (req, res) => {
   try {
     const { start, end, user_id } = req.query;
     if (!start || !end || !user_id)
-      return res.status(400).json({ ok: false, message: "start, end, user_id 필요" });
+      return res
+        .status(400)
+        .json({ ok: false, message: "start, end, user_id 필요" });
 
     const [rows] = await pool.query(
       `
-      SELECT emotion_detail, emotion, created_at
-      FROM analysis_results
-      WHERE user_id = ?
-        AND DATE(CONVERT_TZ(created_at, '+00:00', '+09:00'))
-            BETWEEN DATE(?) AND DATE(?)
-      ORDER BY created_at ASC
+      SELECT r1.*
+      FROM analysis_results r1
+      INNER JOIN (
+          SELECT DATE(created_at) AS day,
+                 MAX(created_at) AS latest_time
+          FROM analysis_results
+          WHERE user_id = ?
+            AND DATE(created_at)
+                BETWEEN DATE(?) AND DATE(?)
+          GROUP BY day
+      ) r2
+      ON DATE(r1.created_at) = r2.day
+         AND r1.created_at = r2.latest_time
+      WHERE r1.user_id = ?
+      ORDER BY r1.created_at ASC;
       `,
-      [user_id, start, end]
+      [user_id, start, end, user_id]
     );
 
-    if (rows.length === 0)
-      return res.json({ ok: false, message: "해당 기간 데이터 없음" });
+    if (!rows.length) return res.json([]);
 
     const result = rows.map((r) => {
-      const emoRaw = deepParse(r.emotion_detail || r.emotion || {});
-      const dist =
-        emoRaw?.fused?.distribution ||
-        emoRaw?.distribution ||
-        emoRaw?.text?.distribution ||
-        emoRaw?.face?.distribution ||
-        {};
-      return { emotion: dist, created_at: r.created_at };
+      let detail = {};
+      try {
+        detail =
+          typeof r.emotion_detail === "string"
+            ? JSON.parse(r.emotion_detail)
+            : r.emotion_detail || {};
+      } catch {
+        detail = {};
+      }
+
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        created_at: r.created_at,
+        emotion_detail: {
+          fused: {
+            final_label:
+              detail?.fused?.final_label ||
+              detail?.fused?.label ||
+              detail?.label ||
+              "unknown",
+            distribution:
+              detail?.fused?.distribution ||
+              detail?.face?.distribution ||
+              detail?.text?.distribution ||
+              {},
+          },
+        },
+      };
     });
 
     res.json(result);
   } catch (err) {
-    console.error("❌ /results/range 오류:", err);
+    console.error("/results/range 오류:", err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-/* =====================================================
-   ✅ /report/weekly (Flask 연동)
-===================================================== */
+   // Flask 리포트 연동 (KST)
 router.get("/report/weekly", async (req, res) => {
   try {
     const { start, end, user_id } = req.query;
     if (!start || !end || !user_id)
-      return res.status(400).json({ ok: false, message: "start, end, user_id 필요" });
+      return res
+        .status(400)
+        .json({ ok: false, message: "start, end, user_id 필요" });
 
-    const flaskUrl = "http://127.0.0.1:5001/report/weekly";
-    console.log("📡 Flask 주간 리포트 요청:", flaskUrl, { start, end, user_id });
+    const flaskUrl = "http://13.124.149.204:5001/report/weekly";
+    console.log("Flask 주간 리포트 요청:", flaskUrl, { start, end, user_id });
 
     const flaskRes = await axios.get(flaskUrl, { params: { start, end, user_id } });
     const data = flaskRes.data || {};
@@ -203,8 +213,61 @@ router.get("/report/weekly", async (req, res) => {
       gpt_feedback: inner.gpt_feedback || "",
     });
   } catch (err) {
-    console.error("❌ /report/weekly 오류:", err.message);
+    console.error("/report/weekly 오류:", err.message);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+  // GPT 코칭 문장 생성
+router.post("/report/weekly-insight", async (req, res) => {
+  try {
+    // Flutter에서 오는 실제 key 맞추기
+    const {
+      intense_date,
+      stable_date,
+      user_id,
+      start,
+      end
+    } = req.body;
+
+    if (!intense_date || !stable_date || !user_id) {
+      return res.status(400).json({
+        ok: false,
+        message: "intense_date, stable_date, user_id 필요",
+      });
+    }
+
+    // Node 내부에서 사용할 변수로 매핑
+    const intense = intense_date;
+    const stable  = stable_date;
+
+    // 주간 평균 감정 GET
+    const weeklyUrl = "http://13.124.149.204:5001/report/weekly";
+    const wk = await axios.get(weeklyUrl, {
+      params: { start, end, user_id },
+    });
+
+    const avgDist =
+      wk.data?.avg_distribution ||
+      wk.data?.result?.avg_distribution ||
+      {};
+
+    // Flask 인사이트 POST
+    const flaskUrl = "http://13.124.149.204:5001/report/weekly-insight";
+    const g = await axios.post(flaskUrl, {
+      intense_date: intense,
+      stable_date: stable,
+      avg_dist: avgDist,
+    });
+
+    return res.json({
+      ok: true,
+      insight: g.data?.insight || "",
+    });
+
+  } catch (err) {
+    console.error("weekly-insight 오류:", err.message);
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 

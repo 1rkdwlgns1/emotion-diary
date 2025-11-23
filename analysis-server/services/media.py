@@ -1,11 +1,10 @@
-# services/media.py
 import os, subprocess, shlex, tempfile
 
 AUDIO_PREPROCESS = os.getenv("AUDIO_PREPROCESS", "light").lower().strip()
 # 옵션: none | light | aggressive
-# - none: 원본 그대로 (전처리 없음)
-# - light(기본): high/lowpass + dynaudnorm (무음 제거 없음)
-# - aggressive: light + silenceremove (긴 무음만 제거, 완화된 파라미터)
+# none: 원본 그대로 (전처리 없음)
+# light(기본): high/lowpass + dynaudnorm (무음 제거 없음)
+# aggressive: light + silenceremove (긴 무음만 제거, 완화된 파라미터)
 
 def _run(cmd: str):
     p = subprocess.run(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -34,8 +33,6 @@ def _build_af_chain(sr: int) -> str:
         return f"aresample={sr}"
     if AUDIO_PREPROCESS == "light":
         return base
-    # aggressive: 무음 제거(매우 완화) 추가 — 긴 정적만 자름
-    # threshold 낮추고, 필요한 무음 길이를 길게 잡아 발화가 잘리지 않게 조정
     sil = (
         "silenceremove="
         "start_periods=1:start_silence=1.2:start_threshold=-45dB:"

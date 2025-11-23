@@ -1,3 +1,5 @@
+/*
+
 import 'package:flutter/material.dart';
 import 'message_detail_screen.dart';
 
@@ -22,7 +24,7 @@ class MessageStorageScreen extends StatelessWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context), // ✅ 메인탭(콘텐츠 탭)으로 복귀
+          onPressed: () => Navigator.pop(context), // 메인탭(콘텐츠 탭)으로 복귀
         ),
         title: const Text(
           "보관함",
@@ -85,7 +87,8 @@ class MessageStorageScreen extends StatelessWidget {
           );
         },
       ),
-      // ❌ bottomNavigationBar 제거 (메인탭 바와 중복 금지)
+      // bottomNavigationBar 제거 (메인탭 바와 중복 금지)
     );
   }
 }
+*/

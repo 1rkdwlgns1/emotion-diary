@@ -4,9 +4,8 @@ import 'settings_screen.dart';
 class UserScreen extends StatefulWidget {
   const UserScreen({super.key, this.onGoCalendar, this.onGoContents});
 
-  // ← 메인탭에서 내려주는 탭 전환 콜백 (UI 변경 없음)
-  final VoidCallback? onGoCalendar; // 감정 리포트 확인 → 캘린더 탭
-  final VoidCallback? onGoContents; // 익명 감정 메시지 관리 → 콘텐츠 탭
+  final VoidCallback? onGoCalendar;
+  final VoidCallback? onGoContents;
 
   @override
   State<UserScreen> createState() => _UserScreenState();
@@ -165,7 +164,7 @@ class _UserScreenState extends State<UserScreen> {
                     const SizedBox(width: 16),
                     const Expanded(
                       child: Text(
-                        '익명 감정 메시지 관리',
+                        '감정 콘텐츠',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -177,7 +176,7 @@ class _UserScreenState extends State<UserScreen> {
               ),
             ),
 
-            // 설정 메뉴 (그대로)
+            // 설정 메뉴
             InkWell(
               borderRadius: borderRadius,
               onTap: () {

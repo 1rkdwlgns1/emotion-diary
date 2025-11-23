@@ -33,9 +33,6 @@ class _IdFindScreenState extends State<IdFindScreen> {
         });
       } else {
         timer.cancel();
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   const SnackBar(content: Text('인증번호가 만료되었습니다')),
-        // );
       }
     });
   }

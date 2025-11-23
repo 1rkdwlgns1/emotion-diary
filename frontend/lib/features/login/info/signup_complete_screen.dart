@@ -1,4 +1,4 @@
-// lib/features/login/info/signup_complete_screen.dart
+//회원가입 완료 스크린
 import 'package:flutter/material.dart';
 import 'info_input_screen.dart';
 

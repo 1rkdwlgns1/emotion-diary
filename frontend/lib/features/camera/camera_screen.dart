@@ -1,9 +1,8 @@
-// lib/features/camera/camera_screen.dart
+//카메라 스크린 화면
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart';
 import 'dart:async';
+import 'dart:io';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -17,21 +16,33 @@ class _CameraScreenState extends State<CameraScreen> {
   List<CameraDescription>? cameras;
   bool isReady = false;
   bool isRecording = false;
+  bool isFrontCamera = false; // 전면카메라 여부
   Timer? _timer;
   int recordingDuration = 0;
 
   @override
   void initState() {
     super.initState();
-    initializeCamera();
+    initializeCamera(isFront: false);
   }
 
-  Future<void> initializeCamera() async {
+  Future<void> initializeCamera({bool isFront = false}) async {
     cameras = await availableCameras();
-    if (cameras!.isNotEmpty) {
-      controller = CameraController(cameras![0], ResolutionPreset.high);
-      await controller!.initialize();
-      if (mounted) setState(() => isReady = true);
+    final selectedCamera = cameras!.firstWhere(
+      (cam) => isFront
+          ? cam.lensDirection == CameraLensDirection.front
+          : cam.lensDirection == CameraLensDirection.back,
+      orElse: () => cameras!.first,
+    );
+
+    controller = CameraController(selectedCamera, ResolutionPreset.high);
+    await controller!.initialize();
+
+    if (mounted) {
+      setState(() {
+        isReady = true;
+        isFrontCamera = isFront;
+      });
     }
   }
 
@@ -87,6 +98,13 @@ class _CameraScreenState extends State<CameraScreen> {
     return '${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _switchCamera() async {
+    if (isRecording) return; // 녹화 중엔 전환 금지
+    setState(() => isReady = false);
+    await controller?.dispose();
+    await initializeCamera(isFront: !isFrontCamera);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!isReady || controller == null) {
@@ -101,6 +119,8 @@ class _CameraScreenState extends State<CameraScreen> {
       body: Stack(
         children: [
           Positioned.fill(child: CameraPreview(controller!)),
+
+          // 닫기 버튼
           Positioned(
             top: 40,
             left: 20,
@@ -115,9 +135,31 @@ class _CameraScreenState extends State<CameraScreen> {
               ),
             ),
           ),
+
+          // 카메라 전환 버튼
+          Positioned(
+            top: 40,
+            right: 20,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.flip_camera_android,
+                  size: 30,
+                  color: Colors.white,
+                ),
+                onPressed: _switchCamera,
+              ),
+            ),
+          ),
+
+          // 녹화 시간 표시
           if (isRecording)
             Positioned(
-              top: 40,
+              top: 100,
               right: 20,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -144,6 +186,8 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
               ),
             ),
+
+          // 녹화 버튼
           Positioned(
             bottom: 50,
             left: 0,

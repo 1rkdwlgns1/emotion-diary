@@ -1,4 +1,5 @@
-import 'dart:async';
+//import 'dart:async';
+/*
 import 'package:flutter/material.dart';
 import '../../main_tab/main_tab_screen.dart'; // 메인탭으로 이동
 
@@ -86,3 +87,4 @@ class _SuccessBody extends StatelessWidget {
     );
   }
 }
+*/

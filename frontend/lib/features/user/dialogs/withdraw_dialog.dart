@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'withdraw_complete_dialog.dart'; // 탈퇴 완료 다이얼로그 import (경로 맞게 조정)
+import 'withdraw_complete_dialog.dart';
 
 Future<void> showWithdrawDialog(
   BuildContext context, {
@@ -130,10 +130,8 @@ Future<void> showWithdrawDialog(
                                       );
                                       return;
                                     }
-                                    Navigator.pop(dialogContext); // 먼저 닫고
-                                    await showWithdrawCompleteDialog(
-                                      context,
-                                    ); // 완료창
+                                    Navigator.pop(dialogContext);
+                                    await showWithdrawCompleteDialog(context);
                                     onWithdraw();
                                   }
                                 : null,

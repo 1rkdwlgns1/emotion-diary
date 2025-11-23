@@ -1,4 +1,3 @@
-# services/fusion.py
 from collections import Counter
 
 _KEYS = ["joy", "sad", "anger", "neutral", "surprise"]
@@ -19,23 +18,21 @@ def face_dist_from_timeline(tl: list[str]) -> dict:
     return _norm(d)
 
 def fuse(text: dict, face: dict, alpha: float | None = None, beta: float | None = None) -> dict:
-    a = alpha if alpha is not None else 0.7
-    b = beta  if beta  is not None else 0.3
+    a = alpha if alpha is not None else 0.85 
+    b = beta  if beta  is not None else 0.15   
     t = _norm(text or {})
     f = _norm(face or {})
 
     fused = {k: a*t.get(k,0.0) + b*f.get(k,0.0) for k in _KEYS}
-    # 중립 가중 소폭 억제
+
     fused["neutral"] *= 0.9
     fused = _norm(fused)
 
     label = max(fused, key=fused.get)
     conf  = fused[label]
 
-    # 불확실 임계값 완화 (0.35)
     final_label = label if conf >= 0.35 else "uncertain"
 
-    # 힌트: 텍스트/페이스 상위 감정 비교
     text_top = max(t, key=t.get) if t else None
     face_top = max(f, key=f.get) if f else None
     source_hint = "ok"
@@ -45,7 +42,6 @@ def fuse(text: dict, face: dict, alpha: float | None = None, beta: float | None 
         else:
             source_hint = "agree"
 
-    # 근소차 혼합
     if text_top and face_top and text_top != face_top and abs(t[text_top]-f[face_top]) < 0.15:
         final_label = "mixed"
 

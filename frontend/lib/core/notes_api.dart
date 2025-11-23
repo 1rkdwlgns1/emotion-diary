@@ -1,10 +1,8 @@
-// lib/core/notes_api.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-// 서버 공통 설정 (네 환경에 맞추면 됨)
-/*const String kBaseUrl = 'http://10.0.2.2:5001';*/
-const String kBaseUrl = 'http://10.0.2.2:3000';
+// 서버 공통 설정
+const String kBaseUrl = 'http://13.209.65.181:3000';
 const String kUserId = 'anon';
 
 class NotesApi {

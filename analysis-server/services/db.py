@@ -28,14 +28,10 @@ def _is_mysql() -> bool:
     except Exception:
         return False
 
-
-# ==================================================================
-# ✅ Flask 주간 리포트용 범위 조회 함수 (날짜 필터 수정 완료)
-# ==================================================================
+# Flask 주간 리포트용 범위 조회 함수
 def get_results_in_range(user_id: str, start_date: str, end_date: str):
     """Node → Flask 주간 리포트용: 특정 유저의 감정 결과 조회"""
     try:
-        # ✅ 수정됨: DATE_ADD → DATE() 로 변경 (문자열 파라미터 안전 처리)
         q = text("""
             SELECT emotion_detail, emotion, created_at
             FROM analysis_results
@@ -48,7 +44,6 @@ def get_results_in_range(user_id: str, start_date: str, end_date: str):
 
         result = []
         for r in rows:
-            # ✅ emotion_detail 또는 emotion 중 있는 값 사용
             emo_raw = r.get("emotion_detail") or r.get("emotion")
             if isinstance(emo_raw, str):
                 try:
@@ -67,21 +62,15 @@ def get_results_in_range(user_id: str, start_date: str, end_date: str):
 
         return result
     except Exception as e:
-        log.error(f"❌ get_results_in_range 오류: {e}")
+        log.error(f"get_results_in_range 오류: {e}")
         return []
 
-
-# ==================================================================
-# 🚫 Flask는 분석 전용 서버로 변경 → DB 테이블 생성 비활성화
-# ==================================================================
+# Flask는 분석 전용 서버로 변경 → DB 테이블 생성 비활성화
 def init_db():
     log.info("[init_db disabled] Flask는 DB 테이블을 생성하지 않습니다.")
     return
 
-
-# ==================================================================
-# 🚫 분석 결과 저장 비활성화 (Node가 MySQL에 저장)
-# ==================================================================
+# 분석 결과 저장 비활성화 (Node가 MySQL에 저장)
 def save_analysis_result(file_type, file_name, emotion_obj, transcript="", user_id="anon", s3_key=None):
     log.info("[save_analysis_result disabled] Flask는 결과를 DB에 저장하지 않습니다.")
     return

@@ -1,3 +1,4 @@
+/*
 import 'package:flutter/material.dart';
 import '../sender/send_complete_screen.dart';
 
@@ -12,7 +13,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   final _messageController = TextEditingController();
   static const mainGreen = Color(0xFF859A7E);
 
-  bool _showWarning = false; // ⚠️ 경고창 표시 여부
+  bool _showWarning = false; // 경고창 표시 여부
 
   @override
   void dispose() {
@@ -126,7 +127,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: () => _toggleWarning(true), // ⚠️ 경고창 열기
+                    onPressed: () => _toggleWarning(true), // 경고창 열기
                     style: ElevatedButton.styleFrom(
                       backgroundColor: mainGreen,
                       foregroundColor: Colors.white,
@@ -220,3 +221,4 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     );
   }
 }
+*/

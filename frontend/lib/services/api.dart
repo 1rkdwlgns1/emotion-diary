@@ -1,14 +1,13 @@
-// lib/services/api.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../core/constants.dart';
 
-/// 감정 분석 관련 API
+// 감정 분석 관련 API
 class AnalysisApi {
-  /// 파일 업로드 + 분석 (Node 서버로 전송)
+  // 파일 업로드 + 분석
   static Future<Map<String, dynamic>> uploadFile(File file) async {
-    // ✅ Node 서버로 전송 (3000 포트)
+    // Node 서버로 전송 (3000 포트)
     final uri = Uri.parse('$kBaseUrl/analysis/file'); // or /analysis/upload
     final req = http.MultipartRequest('POST', uri)
       ..files.add(await http.MultipartFile.fromPath('file', file.path))
@@ -24,7 +23,7 @@ class AnalysisApi {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
-  /// 하루 조회 (Node → DB)
+  // 하루 조회 (Node → DB)
   static Future<Map<String, dynamic>> fetchDay(String date) async {
     final url = Uri.parse('$kBaseUrl/results/day?date=$date&user_id=$kUserId');
     final res = await http.get(url);
@@ -34,7 +33,7 @@ class AnalysisApi {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  /// 주간 조회 (Node → Flask 요약)
+  // 주간 조회 (Node → Flask 요약)
   static Future<Map<String, dynamic>> fetchWeek(
     String start,
     String end,

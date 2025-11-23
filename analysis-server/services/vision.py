@@ -45,7 +45,7 @@ def _analyze_frame(frame_bgr):
         res = DeepFace.analyze(
             img_path=rgb,
             actions=["emotion"],
-            detector_backend="opencv",  # ✅ CPU 친화적
+            detector_backend="opencv",  
             enforce_detection=False
         )
     except Exception:

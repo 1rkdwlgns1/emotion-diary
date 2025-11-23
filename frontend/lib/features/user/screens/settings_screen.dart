@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../dialogs/nickname_edit_dialog.dart';
 import 'account_manage_screen.dart';
+import '../../login/screens/login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String nickname;
@@ -29,6 +30,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const mainGreen = Color(0xFF859A7E);
+
     final TextStyle sectionTitle = const TextStyle(
       fontWeight: FontWeight.bold,
       fontSize: 15,
@@ -46,7 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         backgroundColor: Colors.white,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black87),
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('설정', style: TextStyle(color: Colors.black87)),
@@ -58,30 +61,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             // ===== 설정 =====
             Text('설정', style: sectionTitle),
-            SizedBox(height: 7),
-            // 계정 관리 메뉴
+            const SizedBox(height: 7),
+
+            // 계정 관리
             _RoundedMenuBtn(
               title: '계정 관리',
               onTap: () {
-                // 계정 관리 화면 이동(구현 필요)
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const AccountManageScreen(
-                      username: "홍길동",
-                      email: "example@email.com",
-                      lastLoginText: "5일 전",
-                    ),
+                    builder: (_) => const AccountManageScreen(),
                   ),
                 );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('계정 관리: 별도 화면 연결 필요!')));
               },
               textStyle: menuTitle,
             ),
-            SizedBox(height: 1),
-            // 닉네임 변경 메뉴
+            const SizedBox(height: 1),
+
+            // 닉네임 변경
             _RoundedMenuBtn(
               title: '닉네임 변경',
               onTap: () async {
@@ -96,11 +93,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               textStyle: menuTitle,
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-            // ===== 알림설정 =====
+            // 알림설정
             Text('알림설정', style: sectionTitle),
-            SizedBox(height: 7),
+            const SizedBox(height: 7),
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -129,27 +126,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-            // ===== 감정 데이터 초기화 =====
+            // 감정 데이터 초기화
             _RoundedMenuBtn(
               title: '감정 데이터 초기화',
               onTap: () {},
-              leading: Icon(Icons.refresh, color: Colors.red, size: 20),
+              leading: const Icon(Icons.refresh, color: Colors.red, size: 20),
               textColor: Colors.red,
             ),
-            SizedBox(height: 0),
 
-            // ===== 로그아웃 =====
+            const SizedBox(height: 4),
+
+            // 로그아웃
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Text(
-                  '로그아웃',
-                  style: TextStyle(
-                    color: Colors.black38,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
+                GestureDetector(
+                  onTap: () async {
+                    final shouldLogout = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        title: const Text(
+                          '로그아웃 하시겠습니까?',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        actionsAlignment: MainAxisAlignment.spaceEvenly,
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text(
+                              '취소',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text(
+                              '로그아웃',
+                              style: TextStyle(
+                                color: mainGreen,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (shouldLogout == true && context.mounted) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                  child: const Text(
+                    '로그아웃',
+                    style: TextStyle(
+                      color: Colors.black38,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                 ),
               ],
@@ -190,7 +239,7 @@ class _RoundedMenuBtn extends StatelessWidget {
         ),
         child: Row(
           children: [
-            if (leading != null) ...[leading!, SizedBox(width: 11)],
+            if (leading != null) ...[leading!, const SizedBox(width: 11)],
             Expanded(
               child: Text(
                 title,

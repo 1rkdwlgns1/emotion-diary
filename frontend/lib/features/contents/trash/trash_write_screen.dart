@@ -1,3 +1,4 @@
+// 감정 메시지 쓰기 스크린
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'trash_warning_screen.dart';
@@ -22,7 +23,6 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
     super.dispose();
   }
 
-  // ✅ 수정된 부분: pop() 호출 없이 입력만 비우고 현재 화면 유지
   Future<void> _submit() async {
     final text = _controller.text.trim();
     if (text.isEmpty) {
@@ -54,7 +54,7 @@ class _TrashWriteScreenState extends State<TrashWriteScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('감정을 비웠어요.')));
-      // ❌ Navigator.pop(...) 하지 않음 — 현재 페이지 그대로 유지
+      // Navigator.pop(...) 하지 않음 — 현재 페이지 그대로 유지
     }
   }
 
@@ -183,7 +183,7 @@ class _TrashMultilineField extends StatelessWidget {
   }
 }
 
-/// 퍼즐/연필 느낌의 ‘자글자글’ 테두리
+// 퍼즐/연필 느낌의 ‘자글자글’ 테두리
 class _RoughRoundedRectPainter extends CustomPainter {
   _RoughRoundedRectPainter({
     required this.radius,

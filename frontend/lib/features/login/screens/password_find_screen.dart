@@ -1,7 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../../../core/constants.dart';
+import './login_screen.dart';
 
 class PasswordFindScreen extends StatefulWidget {
   const PasswordFindScreen({super.key});
+
   @override
   State<PasswordFindScreen> createState() => _PasswordFindScreenState();
 }
@@ -9,21 +14,105 @@ class PasswordFindScreen extends StatefulWidget {
 class _PasswordFindScreenState extends State<PasswordFindScreen> {
   final emailController = TextEditingController();
   String? errorText;
+  bool isLoading = false;
 
-  void _onSubmit() {
+  Future<void> _onSubmit() async {
     final email = emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
       setState(() => errorText = '올바른 이메일을 입력하세요.');
       return;
     }
-    setState(() => errorText = null);
+    setState(() {
+      errorText = null;
+      isLoading = true;
+    });
 
-    // 실제로는 여기서 비밀번호 재설정 API 호출 등을 하세요.
+    try {
+      final res = await http.post(
+        Uri.parse('$kBaseUrl/users/reset-password-request'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('비밀번호 재설정 이메일이 발송되었습니다.')));
-    // Navigator.pop(context); // 또는 원하는 페이지 이동
+      final data = jsonDecode(res.body);
+
+      if (res.statusCode == 200 && data['ok'] == true) {
+        await _showResultDialog(
+          title: '이메일 전송 완료',
+          message: '임시 비밀번호가 이메일로 전송되었습니다.\n메일을 확인 후 로그인해주세요.',
+          isSuccess: true,
+        );
+      } else {
+        await _showResultDialog(
+          title: '전송 실패',
+          message: data['message'] ?? '이메일 전송에 실패했습니다.',
+          isSuccess: false,
+        );
+      }
+    } catch (e) {
+      await _showResultDialog(
+        title: '서버 오류',
+        message: '서버와의 연결에 실패했습니다.\n네트워크를 확인해주세요.',
+        isSuccess: false,
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _showResultDialog({
+    required String title,
+    required String message,
+    required bool isSuccess,
+  }) async {
+    const mainGreen = Color(0xFF859A7E);
+
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontSize: 15,
+            color: Colors.black54,
+            height: 1.4,
+          ),
+        ),
+        actionsPadding: const EdgeInsets.only(right: 12, bottom: 8),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              if (isSuccess) {
+                // 성공 시 로그인 화면으로 이동
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text(
+              '확인',
+              style: TextStyle(
+                color: mainGreen,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -71,7 +160,7 @@ class _PasswordFindScreenState extends State<PasswordFindScreen> {
               TextFormField(
                 controller: emailController,
                 decoration: InputDecoration(
-                  hintText: '이메일',
+                  hintText: '이메일 주소를 입력하세요',
                   errorText: errorText,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(7),
@@ -90,19 +179,28 @@ class _PasswordFindScreenState extends State<PasswordFindScreen> {
                 width: double.infinity,
                 height: 46,
                 child: ElevatedButton(
-                  onPressed: _onSubmit,
+                  onPressed: isLoading ? null : _onSubmit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: mainGreen,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(7), // 둥근 모양
+                      borderRadius: BorderRadius.circular(7),
                     ),
                     textStyle: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  child: const Text('비밀번호 재설정'),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Text('인증하기'),
                 ),
               ),
             ],

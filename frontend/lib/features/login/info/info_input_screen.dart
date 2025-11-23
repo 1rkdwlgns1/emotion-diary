@@ -1,7 +1,6 @@
-// lib/features/login/info/info_input_screen.dart
-import 'package:flutter/services.dart'; // ✅ 텍스트 필터링용
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import '../../../../core/user_api.dart'; // ✅ 수정된 경로
+import '../../../../core/user_api.dart';
 import 'interest_select_screen.dart';
 
 class InfoInputScreen extends StatefulWidget {
@@ -73,7 +72,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
               ),
               const SizedBox(height: 20),
 
-              // ▶ 성별 왼쪽 정렬
+              // 성별 왼쪽 정렬
               const Text(
                 "성별",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
@@ -119,7 +118,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                   ),
                 ],
               ),
-              // ▶ 닉네임 (성별과 나이 사이에 삽입)
+              // 닉네임 (성별과 나이 사이에 삽입)
               const SizedBox(height: 20),
               const Text(
                 "닉네임",
@@ -173,7 +172,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
 
               const SizedBox(height: 20),
 
-              // ▶ 나이 - 왼쪽, 폭 좁게
+              // 나이
               const Text(
                 "나이",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
@@ -191,7 +190,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                   ),
                   child: DropdownButton<int>(
                     value: age,
-                    isExpanded: false, // 폭 좁게
+                    isExpanded: false,
                     underline: const SizedBox.shrink(),
                     items: ageRange.map((int value) {
                       return DropdownMenuItem<int>(
@@ -211,7 +210,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
 
               const SizedBox(height: 20),
 
-              // ▶ MBTI - 왼쪽, 폭 좁게
+              // MBTI
               const Text(
                 "MBTI",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
@@ -229,7 +228,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                   ),
                   child: DropdownButton<String>(
                     value: mbti,
-                    isExpanded: false, // 폭 좁게
+                    isExpanded: false,
                     underline: const SizedBox.shrink(),
                     items: mbtiList
                         .map(
@@ -253,12 +252,12 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                 child: ElevatedButton(
                   onPressed: () async {
                     try {
-                      // ✅ 선택값들 (이미 state에 있음)
+                      // 선택값들 (이미 상태에 있음)
                       final selectedGender = gender == '남성' ? 'M' : 'F';
-                      final selectedAge = age; // int형
+                      final selectedAge = age;
                       final selectedMbti = mbti;
 
-                      // ✅ 서버에 업데이트 요청
+                      // 서버에 업데이트 요청
                       final res = await UserApi.updateProfile(
                         nickname: nicknameController.text.trim(),
                         gender: selectedGender,
@@ -273,7 +272,7 @@ class _InfoInputScreenState extends State<InfoInputScreen> {
                           const SnackBar(content: Text('프로필이 저장되었습니다.')),
                         );
 
-                        // ✅ 다음 화면으로 이동
+                        // 다음 화면으로 이동
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(

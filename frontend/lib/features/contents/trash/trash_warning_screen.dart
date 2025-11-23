@@ -1,3 +1,4 @@
+//감정 쓰레기통 경고 메시지 스크린
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'trash_gif_screen.dart';

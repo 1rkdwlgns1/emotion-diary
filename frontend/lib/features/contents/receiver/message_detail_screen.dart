@@ -1,3 +1,5 @@
+/*
+
 import 'package:flutter/material.dart';
 import '../sender/message_sent_confirmation_screen.dart';
 
@@ -134,7 +136,8 @@ class _MessageDetailScreenState extends State<MessageDetailScreen> {
           ),
         ),
       ),
-      // ❌ bottomNavigationBar 없음
+      // bottomNavigationBar 없음
     );
   }
 }
+*/

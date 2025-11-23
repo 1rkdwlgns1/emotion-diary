@@ -1,11 +1,3 @@
-# services/kobert.py
-# ================================
-# 고급형 감정사전 확장판 (v2.1)
-# - CPU 환경 최적화
-# - heuristic 감정 단어 60+개 확장
-# - zero-shot fallback 포함
-# ================================
-
 import os, re
 import torch
 
@@ -18,7 +10,7 @@ _tokenizer = None
 _model = None
 _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ===== 감정 키워드 확장 =====
+# 감정 키워드 확장
 _POS = [
     "기쁘", "좋아", "행복", "즐겁", "재밌", "감사", "사랑", "웃음", "설레", "뿌듯",
     "신나", "기분 좋", "만족", "안심", "평온", "좋았다", "기분이 좋아", "감동", "포근"
@@ -47,7 +39,7 @@ _NEU = [
 ]
 
 
-# ===== 기본 분포 유틸 =====
+# 기본 분포 유틸 
 def _dist5(joy=0, sad=0, anger=0, neutral=1.0, surprise=0):
     s = joy + sad + anger + neutral + surprise
     if s <= 0:
@@ -57,7 +49,7 @@ def _dist5(joy=0, sad=0, anger=0, neutral=1.0, surprise=0):
     }.items()}
 
 
-# ===== 단어 기반 휴리스틱 =====
+# 단어 기반 휴리스틱
 def _heuristic(text: str) -> dict:
     t = (text or "").lower()
     if not t:
@@ -77,7 +69,7 @@ def _heuristic(text: str) -> dict:
     return _dist5(**score)
 
 
-# ===== KoBERT 모델 로드 =====
+# KoBERT 모델 로드
 def _load_kobert():
     global _tokenizer, _model
     if _tokenizer is None or _model is None:
@@ -93,7 +85,7 @@ def _softmax(logits: torch.Tensor) -> torch.Tensor:
     return e / e.sum(dim=-1, keepdim=True)
 
 
-# ===== 7감정 → 5감정 매핑 =====
+# 7감정 → 5감정 매핑
 def _map7to5(d7: dict) -> dict:
     return {
         "joy": float(d7.get("joy", 0.0)),
@@ -104,7 +96,7 @@ def _map7to5(d7: dict) -> dict:
     }
 
 
-# ===== KoBERT 예측 =====
+# KoBERT 예측
 def _kobert_predict7(text: str) -> dict:
     tok, mdl = _load_kobert()
     with torch.no_grad():
@@ -120,7 +112,7 @@ def _kobert_predict7(text: str) -> dict:
     return {lab: float(p) for lab, p in zip(LABELS7, probs)}
 
 
-# ===== Zero-shot 대체 =====
+# Zero-shot 대체
 _zero = None
 def _load_zeroshot():
     global _zero
@@ -142,7 +134,7 @@ def _zeroshot_predict5(text: str) -> dict:
     return {k: scores.get(k, 0.0) / total for k in labels}
 
 
-# ===== 통합 예측 =====
+# 통합 예측
 def predict7(text: str) -> dict:
     txt = (text or "").strip()
     if not txt:
@@ -192,7 +184,7 @@ def predict(text: str) -> dict:
         return _heuristic(text)
 
 
-# ===== 세그먼트 평균 =====
+# 세그먼트 평균
 def predict_segments(segments: list[dict]) -> dict:
     if not segments:
         return predict("")

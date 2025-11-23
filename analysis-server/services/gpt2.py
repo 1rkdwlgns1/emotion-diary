@@ -1,4 +1,3 @@
-# services/gpt2.py
 import os, json, logging, traceback
 from typing import List, Dict, Optional
 
@@ -24,7 +23,7 @@ def _client_ok():
         return False
 
 
-# ================= 🎵 음악 추천 (GPT2 버전) =================
+# 음악 추천 (GPT2 버전)
 def make_music_recs(
     emotion: str,
     count: int = 5,

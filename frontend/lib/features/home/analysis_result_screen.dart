@@ -1,5 +1,5 @@
 // analysis_result_screen.dart
-// 감정 분석 결과 화면
+/*
 import 'package:flutter/material.dart';
 import 'today_emotion_screen.dart';
 
@@ -9,36 +9,134 @@ class AnalysisResultScreen extends StatelessWidget {
 
   static const mainGreen = Color(0xFF859A7E);
 
-  String _pct(double v) => '${v.toStringAsFixed(0)}%';
+  static const _screenGradients = {
+    '기쁨': [Color(0xFFFFF5DA), Colors.white],
+    '슬픔': [Color(0xFFE9F1FF), Colors.white],
+    '분노': [Color(0xFFFFE0E0), Colors.white],
+    '평온': [Color(0xFFE9F7EA), Colors.white],
+    '놀람': [Color(0xFFF3EDFF), Colors.white],
+  };
 
-  Color _color(String k) {
-    switch (k) {
+  IconData _emotionIcon(String emo) {
+    switch (emo) {
       case '기쁨':
-        return const Color(0xFFFFD166);
+        return Icons.wb_sunny_rounded;
       case '슬픔':
-        return const Color(0xFF74C2FF);
+        return Icons.water_drop_rounded;
       case '분노':
-        return const Color(0xFFF6A5B2);
+        return Icons.local_fire_department_rounded;
       case '놀람':
-        return const Color(0xFFBBA7FF);
+        return Icons.bolt_rounded;
       case '평온':
-        return const Color(0xFFBDE4B1);
+        return Icons.self_improvement_rounded;
       default:
-        return Colors.blueGrey.shade300;
+        return Icons.circle_outlined;
+    }
+  }
+
+  static const emotionColors = {
+    '기쁨': Color(0xFFFFC135),
+    '슬픔': Color(0xFF4BA9FF),
+    '분노': Color(0xFFFF6F71),
+    '평온': Color(0xFF79C68A),
+    '놀람': Color(0xFF9B87FF),
+  };
+
+  Color _color(String k) => emotionColors[k] ?? Colors.grey;
+
+  String _emotionKo(dynamic v) {
+    switch (v.toString().toLowerCase()) {
+      case 'joy':
+        return '기쁨';
+      case 'sad':
+        return '슬픔';
+      case 'anger':
+        return '분노';
+      case 'surprise':
+        return '놀람';
+      case 'neutral':
+        return '평온';
+      default:
+        return v.toString();
+    }
+  }
+
+  Widget buildMainEmotionCard(String emotionKo) {
+    final iconColor = emotionColors[emotionKo] ?? Colors.black87;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12.withOpacity(0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(_emotionIcon(emotionKo), size: 42, color: iconColor),
+          const SizedBox(height: 14),
+          Text(
+            "오늘의 감정은 ‘$emotionKo’ 입니다.",
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _emotionDescription(emotionKo),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black87.withOpacity(0.75),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _emotionDescription(String emo) {
+    switch (emo) {
+      case '기쁨':
+        return "따뜻한 기분이 느껴지는 하루였어요.";
+      case '슬픔':
+        return "마음이 조금 무거운 하루였네요.";
+      case '분노':
+        return "감정이 예민했던 순간이 있었어요.";
+      case '평온':
+        return "잔잔하고 안정된 하루였어요.";
+      case '놀람':
+        return "뜻밖의 일이 있었던 하루였어요.";
+      default:
+        return "다양한 감정이 함께한 하루였어요.";
     }
   }
 
   Widget _bar(String label, double v) {
     v = v.clamp(0, 100);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Column(
         children: [
           Row(
             children: [
-              Text(label),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const Spacer(),
-              Text(_pct(v), style: const TextStyle(color: Colors.black54)),
+              Text(
+                "${v.toStringAsFixed(0)}%",
+                style: const TextStyle(fontSize: 16),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -46,10 +144,10 @@ class AnalysisResultScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             child: Stack(
               children: [
-                Container(height: 10, color: Colors.grey.shade200),
+                Container(height: 18, color: Colors.grey.shade200),
                 FractionallySizedBox(
-                  widthFactor: v / 100.0,
-                  child: Container(height: 10, color: _color(label)),
+                  widthFactor: v / 100,
+                  child: Container(height: 18, color: _color(label)),
                 ),
               ],
             ),
@@ -59,40 +157,28 @@ class AnalysisResultScreen extends StatelessWidget {
     );
   }
 
-  // ✅ 피드백 문장에서 "행동 1~3" 제거
   String _stripActions(String? raw) {
     if (raw == null) return '';
     final regex = RegExp(r'^행동\s*[1-3]\s*[:：].*$', multiLine: true);
     final cleaned = raw.replaceAll(regex, '');
-    final lines = cleaned
+    return cleaned
         .split('\n')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .toList();
-    return lines.join('\n');
+        .join('\n');
   }
 
-  // ✅ GPT 원문 + 정제본 모두 포함시켜서 다음 화면에 넘김
   Map<String, dynamic> _normalize(Map<String, dynamic> raw) {
-    // Node or Flask의 구조에 맞게 표준화
-    if (raw.containsKey('emotionData') && raw.containsKey('mainEmotion')) {
-      return {
-        'emotionData': Map<String, double>.from(raw['emotionData']),
-        'mainEmotion': raw['mainEmotion'] ?? '불확실',
-        'gptFeedback': raw['gptFeedback'] ?? '',
-        'music': raw['music'] ?? [],
-      };
-    }
+    if (raw.containsKey('emotionData')) return raw;
 
     final r = raw['result'] ?? raw;
-    final fused = (r['fused'] ?? {}) as Map<String, dynamic>;
     final dist =
-        fused['distribution'] ??
-        (r['face']?['distribution'] ??
-            r['text']?['distribution'] ??
-            {'joy': 0, 'sad': 0, 'anger': 0, 'neutral': 0, 'surprise': 0});
+        r['fused']?['distribution'] ??
+        r['face']?['distribution'] ??
+        r['text']?['distribution'] ??
+        {'joy': 0, 'sad': 0, 'anger': 0, 'neutral': 0, 'surprise': 0};
 
-    final Map<String, double> emotionData = {
+    final mapped = {
       '기쁨': (dist['joy'] ?? 0) * 100,
       '슬픔': (dist['sad'] ?? 0) * 100,
       '분노': (dist['anger'] ?? 0) * 100,
@@ -100,18 +186,13 @@ class AnalysisResultScreen extends StatelessWidget {
       '평온': (dist['neutral'] ?? 0) * 100,
     };
 
-    final sorted = emotionData.entries.toList()
+    final sorted = mapped.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final mainKo = sorted.first.key;
-
-    final gptFeedback = (r['feedback'] ?? '') as String;
-    final music = (r['music'] ?? raw['music'] ?? []) as List;
 
     return {
-      'emotionData': emotionData,
-      'mainEmotion': mainKo,
-      'gptFeedback': gptFeedback, // 원문 (행동 포함)
-      'music': music,
+      'emotionData': mapped,
+      'mainEmotion': sorted.first.key,
+      'gptFeedback': r['feedback'] ?? '',
     };
   }
 
@@ -119,125 +200,141 @@ class AnalysisResultScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final norm = _normalize(result);
     final ed = Map<String, double>.from(norm['emotionData']);
-    final mainKo = norm['mainEmotion'];
-    final gptRaw = (norm['gptFeedback'] ?? '') as String;
-    final gptSummaryOnly = _stripActions(gptRaw); // 피드백 요약만
+    final mainKo = _emotionKo(norm['mainEmotion']);
+    final feedback = _stripActions(norm['gptFeedback']);
+
+    final grad = _screenGradients[mainKo] ?? _screenGradients['평온']!;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('분석 완료'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0.5,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        title: const Text(
+          "분석 결과",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            '감정 분석 결과',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: grad,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          const SizedBox(height: 10),
+        ),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              buildMainEmotionCard(mainKo),
 
-          // 감정 분포 바 그래프
-          Container(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Column(
-              children: [
-                _bar('기쁨', ed['기쁨'] ?? 0),
-                _bar('슬픔', ed['슬픔'] ?? 0),
-                _bar('분노', ed['분노'] ?? 0),
-                _bar('놀람', ed['놀람'] ?? 0),
-                _bar('평온', ed['평온'] ?? 0),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 18),
-
-          // ✅ 피드백 (행동 제외)
-          if (gptSummaryOnly.isNotEmpty) ...[
-            const Text(
-              '피드백',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+              const SizedBox(height: 24),
+              const Text(
+                "감정 비율",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 12),
+
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  children: [
+                    _bar('기쁨', ed['기쁨'] ?? 0),
+                    _bar('슬픔', ed['슬픔'] ?? 0),
+                    _bar('분노', ed['분노'] ?? 0),
+                    _bar('놀람', ed['놀람'] ?? 0),
+                    _bar('평온', ed['평온'] ?? 0),
+                  ],
+                ),
+              ),
+
+              if (feedback.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                const Text(
+                  "피드백",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 24,
+                        color: emotionColors[mainKo],
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          feedback,
+                          style: const TextStyle(fontSize: 15.5, height: 1.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 28),
+              Row(
                 children: [
-                  const Icon(Icons.chat_bubble_outline, color: Colors.black87),
-                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      gptSummaryOnly, // ✅ 행동 제거된 요약만 출력
-                      style: const TextStyle(height: 1.6),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: mainGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () =>
+                          Navigator.of(context).popUntil((r) => r.isFirst),
+                      child: const Text("다시 찍기"),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: mainGreen,
+                        side: const BorderSide(color: mainGreen, width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TodayEmotionScreen(result: norm),
+                          ),
+                        );
+                      },
+                      child: const Text("다음"),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
 
-          // 버튼 2개 (다시 찍기 / 다음)
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () =>
-                      Navigator.of(context).popUntil((r) => r.isFirst),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: mainGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text('다시 찍기'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            TodayEmotionScreen(result: norm), // ✅ 원본 전달
-                      ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: mainGreen,
-                    side: const BorderSide(color: mainGreen, width: 1.5),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('다음'),
-                ),
-              ),
+              const SizedBox(height: 20),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
-}
+}*/
