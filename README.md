@@ -91,32 +91,43 @@ Flutter · Dart · Node.js · Flask · Python · MySQL · AWS
 flowchart TD
     Flutter["Flutter App"]
     Node["Node.js Main Server"]
+    S3[("AWS S3")]
     Flask["Flask AI Server"]
-    DB[(MySQL)]
-    S3[(AWS S3)]
-    Whisper["Whisper"]
-    KoBERT["KoBERT"]
-    DeepFace["DeepFace"]
-    GPT["OpenAI API"]
 
-    Flutter -->|"영상 업로드 / API 요청"| Node
+    Audio["오디오 추출"]
+    Frame["프레임 추출"]
+
+    Whisper["Whisper<br/>STT"]
+    KoBERT["KoBERT<br/>Text Emotion"]
+    DeepFace["DeepFace<br/>Face Emotion"]
+
+    Fusion["Emotion Fusion<br/>Text 70% + Face 30%"]
+    GPT["OpenAI API<br/>GPT-4o mini"]
+    DB[("MySQL")]
+
+    Flutter -->|"영상 업로드"| Node
     Node -->|"영상 저장"| S3
-    Node -->|"s3Key / 분석 요청"| Flask
 
-    Flask -->|"영상 다운로드"| S3
+    Node -->|"s3Key 전달 / 분석 요청"| Flask
+    S3 -->|"영상 다운로드"| Flask
 
-    Flask --> Whisper
-    Whisper --> KoBERT
-    Flask --> DeepFace
+    Flask --> Audio
+    Flask --> Frame
 
-    KoBERT --> Fusion["Emotion Fusion"]
+    Audio --> Whisper
+    Whisper -->|"발화 텍스트"| KoBERT
+
+    Frame --> DeepFace
+
+    KoBERT --> Fusion
     DeepFace --> Fusion
 
-    Fusion --> GPT
-    Flask -->|"분석 결과"| Node
+    Fusion -->|"감정 분포 전달"| GPT
+    GPT -->|"피드백 응답"| Flask
 
+    Flask -->|"감정 분석 결과 + 피드백"| Node
     Node -->|"분석 결과 저장"| DB
-    Node -->|"응답"| Flutter
+    Node -->|"결과 응답"| Flutter
 ```
 
 | 구성 | 역할 |
